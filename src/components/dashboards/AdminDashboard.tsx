@@ -1,112 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../layout/Layout';
 import { formatCurrency } from '../../utils/formatCurrency';
-
-interface DashboardStats {
-  totalProducts: number;
-  totalCategories: number;
-  lowStockItems: number;
-  totalInventoryValue: number;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  stock: number;
-  barcode: string;
-  volume: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  description: string;
-}
+import { useDashboardData } from '../../hooks/useDashboard';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProducts: 0,
-    totalCategories: 0,
-    lowStockItems: 0,
-    totalInventoryValue: 0
-  });
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      // Fetch products
-      const productsResponse = await fetch('http://localhost:5001/api/products', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      // Fetch categories
-      const categoriesResponse = await fetch('http://localhost:5001/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (productsResponse.ok && categoriesResponse.ok) {
-        const productsData = await productsResponse.json();
-        const categoriesData = await categoriesResponse.json();
-        
-        console.log('Products data:', productsData);
-        console.log('Categories data:', categoriesData);
-        
-        // Ensure we have arrays
-        const productsList = Array.isArray(productsData) ? productsData : 
-                           (productsData.products && Array.isArray(productsData.products)) ? productsData.products : [];
-        const categoriesList = Array.isArray(categoriesData) ? categoriesData : 
-                              (categoriesData.categories && Array.isArray(categoriesData.categories)) ? categoriesData.categories : [];
-        
-        setProducts(productsList);
-        setCategories(categoriesList);
-        
-        // Calculate stats
-        const totalProducts = productsList.length;
-        const lowStockItems = productsList.filter((p: Product) => p.stock < 10).length;
-        const totalInventoryValue = productsList.reduce((sum: number, p: Product) => sum + (p.price * p.stock), 0);
-        
-        setStats({
-          totalProducts,
-          totalCategories: categoriesList.length,
-          lowStockItems,
-          totalInventoryValue
-        });
-      } else {
-        console.error('Failed to fetch data:', {
-          productsStatus: productsResponse.status,
-          categoriesStatus: categoriesResponse.status
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { stats, products, categories, loading, error, refetch } = useDashboardData();
 
   if (loading) {
     return (
       <Layout title="Admin Dashboard">
         <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading dashboard data...</div>
+          <div className="animate-pulse">
+            <div className="text-lg text-gray-600">Loading dashboard data...</div>
+            <div className="mt-2 text-sm text-gray-400">Please wait...</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout title="Admin Dashboard">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error loading dashboard</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+              <button 
+                onClick={refetch}
+                className="mt-3 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         </div>
       </Layout>
     );
@@ -119,6 +54,12 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-700">Total Inventory Value</h3>
           <p className="text-3xl font-bold text-green-600">{formatCurrency(stats.totalInventoryValue)}</p>
+          {/* Debug info */}
+          {!loading && (
+            <div className="text-xs text-gray-400 mt-1">
+              Debug: Value: {stats.totalInventoryValue}
+            </div>
+          )}
         </div>
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-700">Products</h3>

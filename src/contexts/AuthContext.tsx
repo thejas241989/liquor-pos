@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiService } from '../services/api';
 
 interface User {
   id: number;
@@ -30,42 +31,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in on app start
+    // Check if user is logged in on app start and verify token validity
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      // Verify token is still valid
+      verifyToken(storedToken, JSON.parse(storedUser));
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
+
+  const verifyToken = async (token: string, userData: User) => {
+    try {
+      const response = await apiService.verifyToken();
+      if (response) {
+        setToken(token);
+        setUser(userData);
+      } else {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:5001/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        console.log('Login successful!');
-        return true;
-      } else {
-        console.error(data.message || 'Login failed');
-        return false;
-      }
+      const data = await apiService.login(username, password);
+      
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      console.log('Login successful!');
+      return true;
     } catch (error) {
-      console.error('Connection error. Please try again.');
+      console.error('Login failed:', error);
       return false;
     }
   };

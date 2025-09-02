@@ -400,13 +400,59 @@ app.get('/api/inventory/summary', (req, res) => {
   });
 });
 
-// Catch all for API routes
-app.use('/api/*', (req, res) => {
-  res.status(200).json({ 
-    message: 'API endpoint available but not implemented in test mode',
-    endpoint: req.path,
-    method: req.method
-  });
+// Process a sale (decrease stock quantities)
+app.post('/api/sales', (req, res) => {
+  try {
+    const { items } = req.body; // items: [{ id, quantity }]
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'No sale items provided' });
+    }
+
+    // Validate and apply sale
+    const soldItems = [];
+    for (const it of items) {
+      const productId = parseInt(it.id);
+      const qty = parseInt(it.quantity);
+      if (Number.isNaN(productId) || Number.isNaN(qty) || qty <= 0) {
+        return res.status(400).json({ message: 'Invalid item format' });
+      }
+
+      const product = products.find(p => p.id === productId);
+      if (!product) {
+        return res.status(404).json({ message: `Product with id ${productId} not found` });
+      }
+
+      if (product.stock_quantity < qty) {
+        return res.status(400).json({ message: `Insufficient stock for product ${product.name}` });
+      }
+
+      // Decrement stock
+      product.stock_quantity -= qty;
+
+      soldItems.push({ id: productId, name: product.name, quantity: qty, price: product.price, subtotal: product.price * qty });
+    }
+
+    // Recalculate summary
+    const summary = {
+      total_products: products.length,
+      total_categories: categories.length,
+      total_inventory_value: products.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0),
+      total_cost_value: products.reduce((sum, p) => sum + (p.cost * p.stock_quantity), 0),
+      low_stock_items: products.filter(p => p.stock_quantity <= p.min_stock_level).length,
+      out_of_stock_items: products.filter(p => p.stock_quantity === 0).length
+    };
+
+    res.json({
+      message: 'Sale processed successfully',
+      soldItems,
+      data: {
+        summary
+      }
+    });
+  } catch (err) {
+    console.error('Sale processing error:', err);
+    res.status(500).json({ message: 'Internal server error processing sale' });
+  }
 });
 
 // 404 handler

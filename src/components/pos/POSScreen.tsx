@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../layout/Layout';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { apiService } from '../../services/api';
 
 interface Product {
   id: string;
@@ -188,7 +189,7 @@ const POSScreen: React.FC = () => {
     return { subtotal, tax, total };
   };
 
-  const completeSale = () => {
+  const completeSale = async () => {
     if (cart.length === 0) {
       alert('Cart is empty!');
       return;
@@ -196,11 +197,44 @@ const POSScreen: React.FC = () => {
 
     const { total } = getCartTotals();
     const saleItems = cart.map(item => `${item.quantity}x ${item.product.name}`).join(', ');
-    
-    if (window.confirm(`Complete sale for ${formatCurrency(total)}?\nItems: ${saleItems}`)) {
-      // Here you would typically send the sale to the backend
+
+    if (!window.confirm(`Complete sale for ${formatCurrency(total)}?\nItems: ${saleItems}`)) return;
+
+    try {
+      // Build items payload (use product id and quantity)
+      const itemsPayload = cart.map(item => ({ id: item.product.id, quantity: item.quantity }));
+
+      const result = await apiService.processSale(itemsPayload);
+
+      if (!result.success) {
+        alert(`Failed to complete sale: ${result.error}`);
+        return;
+      }
+
+      const { soldItems, summary } = result.data;
+      
+      // Update local products stock based on soldItems from server
+      if (soldItems && Array.isArray(soldItems)) {
+        const updatedProducts = products.map(p => {
+          const sold = soldItems.find((s: any) => String(s.id) === String(p.id));
+          if (sold) {
+            return { ...p, stock: Math.max(0, p.stock - sold.quantity) };
+          }
+          return p;
+        });
+        setProducts(updatedProducts);
+      }
+
+      // Dispatch event with summary and sold items so dashboards can update
+      window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
+        detail: { summary, soldItems } 
+      }));
+
       alert('Sale completed successfully!');
       clearCart();
+    } catch (error) {
+      console.error('Error completing sale:', error);
+      alert('Error completing sale. See console for details.');
     }
   };
 

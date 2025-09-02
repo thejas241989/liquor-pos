@@ -65,6 +65,8 @@ const CategoryManagement: React.FC = () => {
         setDescription('');
         setParentId(null);
         setVolumesInput('');
+        // Notify other tabs/components that categories changed
+        try { localStorage.setItem('categories-updated', String(Date.now())); } catch (e) { /* ignore */ }
         alert('Category created');
       } else {
         const err = await res.text();
