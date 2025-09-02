@@ -93,7 +93,14 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-semibold">{title}</h1>
+              {user && (user.role === 'admin' || user.role === 'manager') && (
+                <button onClick={() => navigate('/categories')} className="text-sm px-3 py-1 bg-blue-50 rounded">Manage Categories</button>
+              )}
+            </div>
+          </div>
         </div>
         {children}
       </main>

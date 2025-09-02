@@ -68,6 +68,15 @@ const ProductForm: React.FC = () => {
     fetchProduct();
   }, [id]);
 
+  useEffect(() => {
+    if (!categories || categories.length === 0) return;
+    const selected = categories.find(c => String(c.id) === String(form.category_id));
+    if (selected && Array.isArray(selected.volumes) && selected.volumes.length > 0) {
+      // If current volume is empty, set to first available
+      if (!form.volume) setForm(prev => ({ ...prev, volume: selected.volumes[0] }));
+    }
+  }, [form.category_id, categories]);
+
   const handleChange = (key: keyof FormState, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
@@ -142,7 +151,20 @@ const ProductForm: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">Volume</label>
-                <input value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" />
+                {(() => {
+                  const selected = categories.find(c => String(c.id) === String(form.category_id));
+                  if (selected && Array.isArray(selected.volumes) && selected.volumes.length > 0) {
+                    return (
+                      <select value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded">
+                        <option value="">Select volume</option>
+                        {selected.volumes.map((v: string) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    );
+                  }
+                  return (<input value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" />);
+                })()}
               </div>
 
               <div>

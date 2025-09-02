@@ -13,6 +13,7 @@ import ProductManagement from './components/products/ProductManagement';
 import ProductForm from './components/products/ProductForm';
 import InventoryManagement from './components/inventory/InventoryManagement';
 import ReportsPage from './components/reports/ReportsPage';
+import CategoryManagement from './components/categories/CategoryManagement';
 
 import './App.css';
 
@@ -59,6 +60,12 @@ function App() {
             <Route path="/products" element={
               <ProtectedRoute requiredRole={['admin', 'manager']}>
                 <ProductManagement />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/categories" element={
+              <ProtectedRoute requiredRole={["admin", "manager"]}>
+                <CategoryManagement />
               </ProtectedRoute>
             } />
 

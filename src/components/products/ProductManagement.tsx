@@ -37,6 +37,16 @@ const ProductManagement: React.FC = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'categories-updated') {
+        loadCategories();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -98,6 +108,33 @@ const ProductManagement: React.FC = () => {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('http://localhost:5001/api/categories', {
+        headers
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        let categoriesList = [];
+        if (data.data && Array.isArray(data.data)) {
+          categoriesList = data.data;
+        } else if (Array.isArray(data)) {
+          categoriesList = data;
+        }
+        setCategories(categoriesList);
+      } else {
+        console.error('Failed to fetch categories');
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
     }
   };
 
@@ -166,9 +203,10 @@ const ProductManagement: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-semibold text-gray-700">Products ({filteredProducts.length})</h3>
-          <button onClick={handleAdd} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-            Add New Product
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/products/new')} className="px-3 py-1 bg-blue-600 text-white rounded">Add Product</button>
+            <button onClick={() => navigate('/categories')} className="px-3 py-1 bg-indigo-600 text-white rounded">Manage Categories</button>
+          </div>
         </div>
         
         <div className="mb-4 flex gap-4">
