@@ -22,6 +22,7 @@ const BillerDashboard: React.FC = () => {
           return;
         }
         const json = await res.json();
+        console.log('Inventory summary response:', json);
         if (mounted && json) {
           setSummary(json.data || json);
         }
@@ -46,6 +47,12 @@ const BillerDashboard: React.FC = () => {
             loading ? 'Loading...' : formatCurrency(Number(summary?.total_inventory_value || 0))
           }</p>
           <p className="text-sm text-gray-500">Value of all stocked items</p>
+          {/* Debug info */}
+          {!loading && (
+            <div className="text-xs text-gray-400 mt-1">
+              Debug: {summary ? `Value: ${summary.total_inventory_value}` : 'No summary data'}
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow">
