@@ -246,7 +246,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// Categories endpoints
+// Categories endpoints (read-only in test mode)
 app.get('/api/categories', (req, res) => {
   res.json({
     message: 'Categories retrieved successfully',
@@ -273,67 +273,6 @@ app.get('/api/categories/:id', (req, res) => {
       product_count: categoryProducts.length
     }
   });
-});
-
-// Create category
-app.post('/api/categories', (req, res) => {
-  try {
-    const { name, description = '', parent_id = null, volumes = [] } = req.body;
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({ message: 'Invalid category name' });
-    }
-
-    const newId = categories.length ? Math.max(...categories.map(c => Number(c.id))) + 1 : 1;
-    const newCategory = { id: newId, name: String(name), description: String(description), parent_id: parent_id || null, volumes: Array.isArray(volumes) ? volumes : [], status: 'active' };
-    categories.push(newCategory);
-
-    return res.status(201).json({ message: 'Category created', data: newCategory });
-  } catch (err) {
-    console.error('Create category error', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Update category
-app.put('/api/categories/:id', (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const idx = categories.findIndex(c => Number(c.id) === id);
-    if (idx === -1) return res.status(404).json({ message: 'Category not found' });
-
-    const { name, description, parent_id, volumes, status } = req.body;
-    if (name !== undefined) categories[idx].name = String(name);
-    if (description !== undefined) categories[idx].description = String(description);
-    if (parent_id !== undefined) categories[idx].parent_id = parent_id || null;
-    if (volumes !== undefined) categories[idx].volumes = Array.isArray(volumes) ? volumes : categories[idx].volumes;
-    if (status !== undefined) categories[idx].status = status;
-
-    return res.json({ message: 'Category updated', data: categories[idx] });
-  } catch (err) {
-    console.error('Update category error', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Delete category
-app.delete('/api/categories/:id', (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const idx = categories.findIndex(c => Number(c.id) === id);
-    if (idx === -1) return res.status(404).json({ message: 'Category not found' });
-
-    // Prevent deletion if products exist in category
-    const attachedProducts = products.filter(p => p.category_id === id);
-    if (attachedProducts.length > 0) {
-      return res.status(400).json({ message: 'Cannot delete category with existing products' });
-    }
-
-    const removed = categories.splice(idx, 1)[0];
-    return res.json({ message: 'Category deleted', data: removed });
-  } catch (err) {
-    console.error('Delete category error', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
 });
 
 // Products endpoints
