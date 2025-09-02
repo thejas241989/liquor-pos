@@ -54,7 +54,7 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/thejasdharmaraj/liquor-pos.git
+   git clone https://github.com/thejas241989/liquor-pos.git
    cd liquor-pos
    ```
 
@@ -138,7 +138,7 @@ This project is licensed under the MIT License.
 ## 👨‍💻 Author
 
 **Thejas Dharmaraj**
-- GitHub: [@thejasdharmaraj](https://github.com/thejasdharmaraj)
+- GitHub: [@thejas241989](https://github.com/thejas241989)
 
 ## 🙏 Acknowledgments
 
