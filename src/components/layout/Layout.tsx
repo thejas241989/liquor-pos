@@ -96,9 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-semibold">{title}</h1>
-              {user && (user.role === 'admin' || user.role === 'manager') && (
-                <button onClick={() => navigate('/categories')} className="text-sm px-3 py-1 bg-blue-50 rounded">Manage Categories</button>
-              )}
+              {/* Manage Categories link removed per request */}
             </div>
           </div>
         </div>

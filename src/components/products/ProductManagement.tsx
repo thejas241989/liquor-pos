@@ -37,16 +37,6 @@ const ProductManagement: React.FC = () => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'categories-updated') {
-        loadCategories();
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
-
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -205,7 +195,6 @@ const ProductManagement: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-700">Products ({filteredProducts.length})</h3>
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/products/new')} className="px-3 py-1 bg-blue-600 text-white rounded">Add Product</button>
-            <button onClick={() => navigate('/categories')} className="px-3 py-1 bg-indigo-600 text-white rounded">Manage Categories</button>
           </div>
         </div>
         
