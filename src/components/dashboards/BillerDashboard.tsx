@@ -12,10 +12,18 @@ const BillerDashboard: React.FC = () => {
     let mounted = true;
     const fetchSummary = async () => {
       try {
-        const res = await fetch('/api/inventory/summary');
+        const token = localStorage.getItem('token');
+        const headers: any = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('http://localhost:5001/api/inventory/summary', { headers });
+        if (!res.ok) {
+          console.error('Failed to fetch inventory summary', res.status);
+          return;
+        }
         const json = await res.json();
-        if (mounted && json && json.data) {
-          setSummary(json.data);
+        if (mounted && json) {
+          setSummary(json.data || json);
         }
       } catch (err) {
         console.error('Failed to load inventory summary', err);
