@@ -35,8 +35,6 @@ const Login: React.FC = () => {
     setLoading(true);
     setError(null);
     
-    console.log('Form submitting with:', { username: username.trim(), password });
-    
     const success = await login(username.trim(), password);
     setLoading(false);
 
