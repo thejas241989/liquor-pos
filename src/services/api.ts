@@ -158,6 +158,21 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Report endpoints
+  async getReport(reportId: string, params?: Record<string, string | number>) {
+    const buildQuery = (p?: Record<string, string | number>) => p ? '?' + new URLSearchParams(
+      Object.entries(p).reduce((acc, [key, value]) => {
+        if (value !== undefined) acc[key] = value.toString();
+        return acc;
+      }, {} as Record<string, string>)
+    ).toString() : '';
+
+    const qs = buildQuery(params);
+
+    // Prefer the reports router endpoint for all report keys so both test and real servers respond
+    return this.request(`/reports/${reportId}${qs}`);
+  }
 }
 
 export const apiService = new ApiService();

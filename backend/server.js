@@ -21,6 +21,7 @@ const salesRoutes = require('./routes/sales');
 const inventoryRoutes = require('./routes/inventory');
 const reportsRoutes = require('./routes/reports');
 const usersRoutes = require('./routes/users');
+const categoriesRoutes = require('./routes/categories');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -29,6 +30,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/categories', categoriesRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

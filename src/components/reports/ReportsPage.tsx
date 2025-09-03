@@ -1,9 +1,57 @@
-import React from 'react';
-import { FileText, Download, TrendingUp, Package, DollarSign, BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Download, TrendingUp, Package, DollarSign, BarChart3, Calendar } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
+import { useNavigate } from 'react-router-dom';
 
 const ReportsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [reportType, setReportType] = useState('');
+  const [dateRange, setDateRange] = useState('today');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const handleGenerateReport = () => {
+    if (!reportType) return;
+    
+    let url = `/reports/${reportType}`;
+    const params = new URLSearchParams();
+    
+    if (dateRange === 'custom' && startDate && endDate) {
+      params.set('start_date', startDate);
+      params.set('end_date', endDate);
+    } else if (dateRange !== 'today') {
+      const today = new Date();
+      let start: Date;
+      
+      switch (dateRange) {
+        case 'week':
+          start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          start = new Date(today.getFullYear(), today.getMonth(), 1);
+          break;
+        case 'quarter':
+          const quarter = Math.floor(today.getMonth() / 3);
+          start = new Date(today.getFullYear(), quarter * 3, 1);
+          break;
+        case 'year':
+          start = new Date(today.getFullYear(), 0, 1);
+          break;
+        default:
+          start = today;
+      }
+      
+      params.set('start_date', start.toISOString().split('T')[0]);
+      params.set('end_date', today.toISOString().split('T')[0]);
+    }
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    
+    navigate(url);
+  };
   const getHeaderActions = () => (
     <>
       <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
@@ -37,19 +85,19 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Sales Reports</h3>
           </div>
           <div className="space-y-3">
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/daily-sales')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Daily Sales Report</div>
               <div className="text-sm text-gray-600">View today's sales performance</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/monthly-sales')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Monthly Sales Summary</div>
               <div className="text-sm text-gray-600">Monthly revenue and trends</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/top-products')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Top Selling Products</div>
               <div className="text-sm text-gray-600">Best performing items</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/biller-performance')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Biller Performance</div>
               <div className="text-sm text-gray-600">Staff sales metrics</div>
             </button>
@@ -63,19 +111,19 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Inventory Reports</h3>
           </div>
           <div className="space-y-3">
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/current-stock')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Current Stock Levels</div>
               <div className="text-sm text-gray-600">Real-time inventory status</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/low-stock')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Low Stock Alert</div>
               <div className="text-sm text-gray-600">Items requiring restock</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/stock-movement')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Stock Movement</div>
               <div className="text-sm text-gray-600">Inventory flow analysis</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/reconciliation')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Reconciliation Report</div>
               <div className="text-sm text-gray-600">Inventory reconciliation</div>
             </button>
@@ -89,19 +137,19 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Financial Reports</h3>
           </div>
           <div className="space-y-3">
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/revenue-summary')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Revenue Summary</div>
               <div className="text-sm text-gray-600">Income analysis and trends</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/tax-reports')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Tax Reports</div>
               <div className="text-sm text-gray-600">Tax calculation and filing</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/profit-analysis')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Profit Analysis</div>
               <div className="text-sm text-gray-600">P&L statements</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/payment-methods')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Payment Methods</div>
               <div className="text-sm text-gray-600">Payment method breakdown</div>
             </button>
@@ -115,19 +163,19 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Analytics</h3>
           </div>
           <div className="space-y-3">
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/customer-analytics')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Customer Analytics</div>
               <div className="text-sm text-gray-600">Customer behavior insights</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/sales-trends')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Sales Trends</div>
               <div className="text-sm text-gray-600">Historical sales patterns</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/performance-metrics')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Performance Metrics</div>
               <div className="text-sm text-gray-600">KPI tracking and analysis</div>
             </button>
-            <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/reports/seasonal-analysis')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Seasonal Analysis</div>
               <div className="text-sm text-gray-600">Seasonal trend analysis</div>
             </button>
@@ -144,17 +192,27 @@ const ReportsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <select 
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
               <option value="">Select Report Type</option>
-              <option value="sales">Sales Report</option>
-              <option value="inventory">Inventory Report</option>
-              <option value="financial">Financial Report</option>
-              <option value="analytics">Analytics Report</option>
+              <option value="daily-sales">Daily Sales Report</option>
+              <option value="monthly-sales">Monthly Sales</option>
+              <option value="top-products">Top Products</option>
+              <option value="current-stock">Current Stock</option>
+              <option value="revenue-summary">Revenue Summary</option>
+              <option value="biller-performance">Biller Performance</option>
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <select 
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
               <option value="today">Today</option>
               <option value="week">This Week</option>
               <option value="month">This Month</option>
@@ -163,8 +221,34 @@ const ReportsPage: React.FC = () => {
               <option value="custom">Custom Range</option>
             </select>
           </div>
+          {dateRange === 'custom' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </>
+          )}
           <div className="flex items-end">
-            <button className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            <button 
+              onClick={handleGenerateReport}
+              disabled={!reportType}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
               <BarChart3 className="w-4 h-4" />
               Generate Report
             </button>

@@ -227,4 +227,50 @@ router.get('/reconciliation', [verifyToken, requireStockReconciler], async (req,
   }
 });
 
+// Inventory summary endpoint (for dashboard)
+router.get('/summary', [verifyToken], async (req, res) => {
+  try {
+    // Get total products count
+    const [productStats] = await db.execute(`
+      SELECT 
+        COUNT(*) as total_products,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_products,
+        COUNT(CASE WHEN stock_quantity <= min_stock_level THEN 1 END) as low_stock_items
+      FROM products
+    `);
+
+    // Get categories count
+    const [categoryStats] = await db.execute(`
+      SELECT COUNT(*) as total_categories FROM categories
+    `);
+
+    // Get inventory value (retail and cost)
+    const [inventoryValue] = await db.execute(`
+      SELECT 
+        COALESCE(SUM(stock_quantity * price), 0) as total_inventory_value,
+        COALESCE(SUM(stock_quantity * COALESCE(cost_price, price * 0.7)), 0) as total_cost_value
+      FROM products 
+      WHERE status = 'active'
+    `);
+
+    const summary = {
+      total_products: productStats[0].total_products,
+      active_products: productStats[0].active_products,
+      total_categories: categoryStats[0].total_categories,
+      low_stock_items: productStats[0].low_stock_items,
+      total_inventory_value: inventoryValue[0].total_inventory_value,
+      total_cost_value: inventoryValue[0].total_cost_value
+    };
+
+    res.json({
+      message: 'Inventory summary retrieved successfully',
+      data: summary
+    });
+
+  } catch (error) {
+    console.error('Inventory summary error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 module.exports = router;

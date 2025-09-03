@@ -14,6 +14,7 @@ import ProductManagement from './components/products/ProductManagement';
 import ProductForm from './components/products/ProductForm';
 import InventoryManagement from './components/inventory/InventoryManagement';
 import ReportsPage from './components/reports/ReportsPage';
+import ReportDetail from './components/reports/ReportDetail';
 import UsersManagement from './components/users/UsersManagement';
 import UserForm from './components/users/UserForm';
 
@@ -87,6 +88,12 @@ function App() {
             <Route path="/reports" element={
               <ProtectedRoute requiredRole={['admin', 'manager']}>
                 <ReportsPage />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/reports/:reportId" element={
+              <ProtectedRoute requiredRole={['admin', 'manager']}>
+                <ReportDetail />
               </ProtectedRoute>
             } />
             

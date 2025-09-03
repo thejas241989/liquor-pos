@@ -61,6 +61,9 @@ const categories = [
   { id: 10, name: 'Mixers', description: 'Non-alcoholic mixers and sodas', status: 'active' }
 ];
 
+// In-memory sales history to track transactions
+let salesHistory = [];
+
 // In-memory products data with various volumes
 const products = [
   // Whiskey Category (8 products)
@@ -462,11 +465,28 @@ app.post('/api/sales', (req, res) => {
         return res.status(400).json({ message: `Insufficient stock for product ${product.name}` });
       }
 
-      // Decrement stock
-      product.stock_quantity -= qty;
+    // Decrement stock
+    product.stock_quantity -= qty;
 
-      soldItems.push({ id: productId, name: product.name, quantity: qty, price: product.price, subtotal: product.price * qty });
-    }
+    soldItems.push({ id: productId, name: product.name, quantity: qty, price: product.price, subtotal: product.price * qty });
+  }
+
+  // Store the sale in salesHistory for reporting
+  const saleRecord = {
+    id: Date.now(), // Simple ID generation
+    sale_date: new Date().toISOString(),
+    total_amount: soldItems.reduce((sum, item) => sum + item.subtotal, 0),
+    items: soldItems.map(item => ({
+      product_id: item.id,
+      product_name: item.name,
+      quantity: item.quantity,
+      unit_price: item.price,
+      subtotal: item.subtotal
+    }))
+  };
+  
+  salesHistory.push(saleRecord);
+  console.log('Sale recorded:', saleRecord.id, 'Total sales in history:', salesHistory.length);
 
     // Recalculate summary
     const summary = {
@@ -488,6 +508,152 @@ app.post('/api/sales', (req, res) => {
   } catch (err) {
     console.error('Sale processing error:', err);
     res.status(500).json({ message: 'Internal server error processing sale' });
+  }
+});
+
+// Mock report endpoints
+app.get('/api/reports/:reportId', (req, res) => {
+  const { reportId } = req.params;
+  const { range = 'today' } = req.query;
+
+  // Simple mock responses for selected report types
+  switch (reportId) {
+    case 'daily-sales': {
+      const qsStart = req.query.start_date;
+      const qsEnd = req.query.end_date;
+
+      // New category-wise daily sales format
+      try {
+        if (Array.isArray(salesHistory) && salesHistory.length > 0) {
+          const parseDate = (d) => d ? new Date(d) : null;
+          const startDate = parseDate(qsStart);
+          const endDate = parseDate(qsEnd);
+          const inRange = (d) => {
+            const t = new Date(d);
+            if (startDate && endDate) return t >= startDate && t <= endDate;
+            if (startDate) return t >= startDate;
+            if (endDate) return t <= endDate;
+            const today = new Date();
+            return t.toDateString() === today.toDateString();
+          };
+
+          const filtered = salesHistory.filter(s => inRange(s.sale_date));
+          
+          // Create category-wise aggregated rows
+          const rows = [];
+          
+          filtered.forEach(sale => {
+            sale.items.forEach(item => {
+              // Find product to get category
+              const product = products.find(p => p.id === item.product_id);
+              const category = product ? categories.find(c => c.id === product.category_id) : null;
+              
+              rows.push({
+                category: category ? category.name : 'Unknown',
+                product: item.product_name,
+                unit_price: item.unit_price,
+                quantity: item.quantity,
+                total_amount: item.subtotal
+              });
+            });
+          });
+
+          const totals = {
+            total_quantity: rows.reduce((sum, r) => sum + r.quantity, 0),
+            total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0)
+          };
+
+          return res.json({ 
+            message: 'Daily sales report (category-wise)', 
+            data: { 
+              range: { start_date: qsStart, end_date: qsEnd }, 
+              rows, 
+              totals 
+            } 
+          });
+        }
+      } catch (e) {
+        console.error('Error aggregating salesHistory for daily-sales:', e);
+      }
+
+      // Fallback mock data with category-wise format
+      const rows = [
+        { category: 'Whiskey', product: 'Royal Stag Reserve 750ml', unit_price: 950, quantity: 3, total_amount: 2850 },
+        { category: 'Beer', product: 'Kingfisher Premium 330ml', unit_price: 120, quantity: 10, total_amount: 1200 },
+        { category: 'Vodka', product: 'Romanov Vodka 750ml', unit_price: 800, quantity: 2, total_amount: 1600 },
+        { category: 'Rum', product: 'Old Monk 750ml', unit_price: 550, quantity: 4, total_amount: 2200 }
+      ];
+      
+      const totals = {
+        total_quantity: rows.reduce((sum, r) => sum + r.quantity, 0),
+        total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0)
+      };
+
+      return res.json({ 
+        message: 'Daily sales report (category-wise)', 
+        data: { 
+          range: { start_date: qsStart, end_date: qsEnd }, 
+          rows, 
+          totals 
+        } 
+      });
+    }
+
+    case 'monthly-sales': {
+      const qsStart = req.query.start_date;
+      const qsEnd = req.query.end_date;
+      // Mock monthly summary and a few transactions
+      const summary = { totalSales: 950000, totalTransactions: 420, averageTicket: 2261 };
+      const topDays = [
+        { date: '2025-08-15', revenue: 45000 },
+        { date: '2025-08-22', revenue: 52000 },
+        { date: '2025-08-29', revenue: 48000 }
+      ];
+      return res.json({ message: 'Monthly sales report (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, summary, topDays } });
+    }
+
+    case 'top-products': {
+      const qsStart = req.query.start_date;
+      const qsEnd = req.query.end_date;
+      // Return mock top selling products
+      const topProducts = [
+        { id: 11, name: 'Romanov Vodka 750ml', total_quantity_sold: 320, total_revenue: 256000 },
+        { id: 1, name: 'Royal Stag Reserve 750ml', total_quantity_sold: 280, total_revenue: 266000 },
+        { id: 49, name: 'Kingfisher Premium 330ml', total_quantity_sold: 1200, total_revenue: 144000 }
+      ];
+      return res.json({ message: 'Top products (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, topProducts } });
+    }
+
+    case 'biller-performance': {
+      const qsStart = req.query.start_date;
+      const qsEnd = req.query.end_date;
+      // Mock performance per biller/staff
+      const performance = [
+        { biller: 'biller', salesCount: 120, totalSales: 250000 },
+        { biller: 'manager', salesCount: 80, totalSales: 200000 },
+        { biller: 'admin', salesCount: 25, totalSales: 75000 }
+      ];
+      return res.json({ message: 'Biller performance (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, performance } });
+    }
+
+    case 'current-stock': {
+      const summary = {
+        total_products: products.length,
+        total_categories: categories.length,
+        total_inventory_value: products.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0),
+        total_cost_value: products.reduce((sum, p) => sum + (p.cost * p.stock_quantity), 0),
+        low_stock_items: products.filter(p => p.stock_quantity <= p.min_stock_level).length,
+      };
+      return res.json({ message: 'Current stock report', data: summary });
+    }
+
+    case 'revenue-summary': {
+      const revenue = products.reduce((sum, p) => sum + (p.price * (p.stock_quantity * 0.05)), 0); // mock 5% sold
+      return res.json({ message: 'Revenue summary (mock)', data: { range: { start_date, end_date }, revenue } });
+    }
+
+    default:
+      return res.status(404).json({ message: 'Report not found', data: null });
   }
 });
 

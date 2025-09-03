@@ -25,14 +25,14 @@ router.get('/', [
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
-    const { category, search, status = 'active' } = req.query;
+    const { category_id, search, status = 'active' } = req.query;
 
     let whereClause = 'WHERE p.status = ?';
     let queryParams = [status];
 
-    if (category) {
-      whereClause += ' AND (p.category_id = ? OR p.subcategory_id = ?)';
-      queryParams.push(category, category);
+    if (category_id) {
+      whereClause += ' AND p.category_id = ?';
+      queryParams.push(parseInt(category_id));
     }
 
     if (search) {
@@ -44,18 +44,35 @@ router.get('/', [
     // Get products with category information
     const query = `
       SELECT 
-        p.*,
-        c.name as category_name,
-        sc.name as subcategory_name
+        p.id,
+        p.name,
+        p.category_id,
+        p.barcode,
+        p.price,
+        p.unit_price,
+        p.cost_price,
+        p.stock_quantity,
+        p.min_stock_level,
+        p.tax_percentage,
+        p.brand,
+        p.volume,
+        p.alcohol_percentage,
+        p.description,
+        p.status,
+        p.created_at,
+        p.updated_at,
+        c.name as category_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN categories sc ON p.subcategory_id = sc.id
       ${whereClause}
       ORDER BY p.name
       LIMIT ? OFFSET ?
     `;
 
     queryParams.push(limit, offset);
+
+    console.log('Query:', query);
+    console.log('Params:', queryParams);
 
     const [products] = await db.execute(query, queryParams);
 
@@ -65,16 +82,18 @@ router.get('/', [
       FROM products p
       ${whereClause}
     `;
-    const [countResult] = await db.execute(countQuery, queryParams.slice(0, -2));
+    const countParams = queryParams.slice(0, -2); // Remove LIMIT and OFFSET
+    const [countResult] = await db.execute(countQuery, countParams);
     const total = countResult[0].total;
 
     res.json({
-      products,
+      message: 'Products retrieved successfully',
+      data: products,
       pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(total / limit),
-        totalItems: total,
-        itemsPerPage: limit
+        current_page: page,
+        total_pages: Math.ceil(total / limit),
+        total_items: total,
+        items_per_page: limit
       }
     });
 
