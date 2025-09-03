@@ -75,6 +75,28 @@ router.post('/', [
   }
 });
 
+// Get single user (Admin only)
+router.get('/:id', [verifyToken, requireAdmin], async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [users] = await db.execute(
+      'SELECT id, username, email, role, status, created_at, updated_at FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(users[0]);
+
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Update user (Admin only)
 router.put('/:id', [
   verifyToken,

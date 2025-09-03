@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const verifyToken = async (token: string, userData: User) => {
     try {
       const response = await apiService.verifyToken();
-      if (response) {
+      if (response.success) {
         setToken(token);
         setUser(userData);
       } else {

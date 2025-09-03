@@ -122,6 +122,42 @@ class ApiService {
       body: JSON.stringify({ items }),
     });
   }
+
+  // User endpoints
+  async getUsers(params?: { page?: number; limit?: number }) {
+    const queryString = params ? '?' + new URLSearchParams(
+      Object.entries(params).reduce((acc, [key, value]) => {
+        if (value !== undefined) acc[key] = value.toString();
+        return acc;
+      }, {} as Record<string, string>)
+    ).toString() : '';
+
+    return this.request(`/users${queryString}`);
+  }
+
+  async getUser(id: string) {
+    return this.request(`/users/${id}`);
+  }
+
+  async createUser(payload: { username: string; email: string; password: string; role: string; status?: string }) {
+    return this.request('/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateUser(id: string, payload: { username?: string; email?: string; password?: string; role?: string; status?: string }) {
+    return this.request(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteUser(id: string) {
+    return this.request(`/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const apiService = new ApiService();

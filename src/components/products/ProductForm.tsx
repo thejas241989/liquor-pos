@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import Layout from '../layout/Layout';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { Package, Save, ArrowLeft } from 'lucide-react';
+import PageHeader from '../common/PageHeader';
+import AdminNavigation from '../common/AdminNavigation';
 
 interface FormState {
   name: string;
@@ -75,7 +76,7 @@ const ProductForm: React.FC = () => {
       // If current volume is empty, set to first available
       if (!form.volume) setForm(prev => ({ ...prev, volume: selected.volumes[0] }));
     }
-  }, [form.category_id, categories]);
+  }, [form.category_id, form.volume, categories]);
 
   const handleChange = (key: keyof FormState, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -127,13 +128,45 @@ const ProductForm: React.FC = () => {
     }
   };
 
+  const getHeaderActions = () => (
+    <>
+      <button 
+        onClick={() => navigate('/products')}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Products
+      </button>
+      <button 
+        onClick={handleSave}
+        disabled={loading}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+      >
+        <Save className="w-4 h-4" />
+        {id ? 'Update Product' : 'Create Product'}
+      </button>
+    </>
+  );
+
   return (
-    <Layout title={id ? 'Edit Product' : 'Add Product'}>
-      <div className="bg-white p-6 rounded-lg shadow max-w-3xl mx-auto">
-        {(loading) ? (
-          <div className="text-center py-16">Loading product...</div>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <PageHeader
+        title={id ? 'Edit Product' : 'Add Product'}
+        description={id ? 'Update product information' : 'Create a new product'}
+        icon={<Package className="w-8 h-8 text-blue-600" />}
+        actions={getHeaderActions()}
+      />
+
+      <AdminNavigation currentPage="products" />
+
+      <div className="bg-white rounded-lg shadow-sm max-w-4xl mx-auto">
+        {loading ? (
+          <div className="text-center py-16">
+            <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading product...</p>
+          </div>
         ) : (
-          <>
+          <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Name</label>
@@ -182,15 +215,10 @@ const ProductForm: React.FC = () => {
                 <input type="number" value={String(form.stock_quantity)} onChange={e => handleChange('stock_quantity', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" />
               </div>
             </div>
-
-            <div className="mt-6 flex gap-3">
-              <button onClick={() => navigate('/products')} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded">{saving ? 'Saving...' : 'Save'}</button>
-            </div>
-          </>
+          </div>
         )}
       </div>
-    </Layout>
+    </div>
   );
 };
 

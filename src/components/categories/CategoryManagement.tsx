@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import Layout from '../layout/Layout';
-import { formatCurrency } from '../../utils/formatCurrency';
 import { useNavigate } from 'react-router-dom';
+import { Tag, Plus, Edit, Trash2, Folder, FolderOpen } from 'lucide-react';
+import PageHeader from '../common/PageHeader';
+import AdminNavigation from '../common/AdminNavigation';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 interface Category {
   id: string | number;
@@ -81,25 +83,63 @@ const CategoryManagement: React.FC = () => {
     }
   };
 
+  const getHeaderActions = () => (
+    <>
+      <button 
+        onClick={() => navigate('/products')} 
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        Back to Products
+      </button>
+      <button 
+        type="submit"
+        form="category-form"
+        disabled={saving}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+      >
+        <Plus className="w-4 h-4" />
+        {saving ? 'Creating...' : 'Add Category'}
+      </button>
+    </>
+  );
+
   return (
-    <Layout title="Category Management">
-      <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-700">Manage Categories & Volumes</h3>
-          <div className="flex gap-2">
-            <button onClick={() => navigate('/products')} className="px-3 py-1 bg-gray-100 rounded">Back to Products</button>
-          </div>
-        </div>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <PageHeader
+        title="Category Management"
+        description="Manage product categories and volumes"
+        icon={<Tag className="w-8 h-8 text-purple-600" />}
+        actions={getHeaderActions()}
+      />
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <AdminNavigation currentPage="categories" />
+
+      {/* Create Category Form */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <FolderOpen className="w-5 h-5 text-purple-600" />
+          Create New Category
+        </h3>
+
+        <form id="category-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full border rounded px-3 py-2" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+            <input 
+              value={name} 
+              onChange={(e) => setName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              placeholder="Enter category name"
+              required
+            />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Parent Category (optional)</label>
-            <select value={parentId ?? ''} onChange={(e) => setParentId(e.target.value || null)} className="mt-1 block w-full border rounded px-3 py-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Parent Category (optional)</label>
+            <select 
+              value={parentId ?? ''} 
+              onChange={(e) => setParentId(e.target.value || null)} 
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
               <option value="">— None —</option>
               {categories.map(cat => (
                 <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
@@ -108,37 +148,88 @@ const CategoryManagement: React.FC = () => {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Description</label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 block w-full border rounded px-3 py-2" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <input 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)} 
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              placeholder="Enter category description"
+            />
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Volumes (comma separated) — e.g. 750ml, 375ml, 180ml</label>
-            <input value={volumesInput} onChange={(e) => setVolumesInput(e.target.value)} className="mt-1 block w-full border rounded px-3 py-2" placeholder="750ml, 375ml" />
-          </div>
-
-          <div className="md:col-span-2 flex justify-end">
-            <button type="submit" disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-              {saving ? 'Saving...' : 'Create Category'}
-            </button>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Volumes (comma separated)
+              <span className="text-gray-500 text-sm font-normal"> — e.g. 750ml, 375ml, 180ml</span>
+            </label>
+            <input 
+              value={volumesInput} 
+              onChange={(e) => setVolumesInput(e.target.value)} 
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="750ml, 375ml, 180ml"
+            />
           </div>
         </form>
+      </div>
 
-        <div>
-          <h4 className="text-md font-semibold mb-2">Existing Categories</h4>
+      {/* Existing Categories */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Folder className="w-5 h-5 text-purple-600" />
+            Existing Categories ({categories.length})
+          </h4>
+        </div>
+        
+        <div className="p-6">
           {loading ? (
-            <div>Loading...</div>
+            <div className="text-center py-8">
+              <div className="animate-spin w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading categories...</p>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-8">
+              <Tag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No categories found</h3>
+              <p className="text-gray-600">Create your first category to get started</p>
+            </div>
           ) : (
-            <div className="space-y-2">
-              {categories.length === 0 && <div className="text-gray-500">No categories</div>}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map(cat => (
-                <div key={cat.id} className="p-3 border rounded flex justify-between items-center">
-                  <div>
-                    <div className="font-medium">{cat.name}</div>
-                    <div className="text-sm text-gray-500">{cat.description || '—'}</div>
-                    {Array.isArray(cat.volumes) && cat.volumes.length > 0 && (
-                      <div className="text-sm text-gray-600 mt-1">Volumes: {cat.volumes.join(', ')}</div>
-                    )}
+                <div key={cat.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-5 h-5 text-purple-600" />
+                      <h5 className="font-medium text-gray-900">{cat.name}</h5>
+                    </div>
+                  </div>
+                  
+                  {cat.description && (
+                    <p className="text-sm text-gray-600 mb-3">{cat.description}</p>
+                  )}
+                  
+                  {Array.isArray(cat.volumes) && cat.volumes.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium text-gray-500 mb-2">Available Volumes:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {cat.volumes.map((volume, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                            {volume}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                    <button className="flex items-center gap-1 px-3 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors">
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button className="flex items-center gap-1 px-3 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -146,7 +237,7 @@ const CategoryManagement: React.FC = () => {
           )}
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

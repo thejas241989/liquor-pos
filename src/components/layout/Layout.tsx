@@ -29,6 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
           { label: 'Products', path: '/products' },
           { label: 'Inventory', path: '/inventory' },
           { label: 'Reports', path: '/reports' },
+          { label: 'Users', path: '/users' },
         ];
       case 'manager':
         return [

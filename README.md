@@ -10,7 +10,17 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - **Multi-role Authentication**: Admin, Manager, Biller, and Stock Reconciler roles
 - **Dynamic Pricing**: Support for various product categories and volumes
 
-### 📊 Advanced Dashboard Analytics
+### � Advanced User Management
+- **Comprehensive User CRUD**: Create, read, update, and delete user accounts
+- **Role-based Access Control**: Granular permissions for different user types
+- **Advanced Search & Filtering**: Search by username/email, filter by role and status
+- **Bulk Operations**: Multi-select users for bulk deletion
+- **Real-time Validation**: Form validation with password strength indicators
+- **User Activity Tracking**: Monitor user actions and changes
+- **Data Export**: Export user data to CSV format
+- **Professional UI**: Modern interface with responsive design and visual feedback
+
+### �📊 Advanced Dashboard Analytics
 - **Admin Dashboard**: Complete business overview with inventory metrics
 - **Biller Dashboard**: Streamlined interface for sales operations
 - **Real-time Data Sync**: Live updates across all dashboard components
@@ -27,6 +37,13 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - **Role-based Access Control**: Granular permissions system
 - **Token Verification**: Automatic session validation
 - **Secure API Endpoints**: Protected backend services
+- **Password Security**: Strong password requirements and validation
+
+### 💾 Database Infrastructure
+- **MySQL Integration**: Production-ready MySQL database
+- **Comprehensive Schema**: 10 tables for complete system functionality
+- **Data Integrity**: Foreign key constraints and data validation
+- **Backup Ready**: Structured data for easy backup and recovery
 
 ## 🛠 Technical Architecture
 
@@ -39,15 +56,19 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 
 ### Backend Stack
 - **Node.js** with Express.js framework
+- **MySQL Database** with comprehensive schema
 - **JWT Authentication** for secure user sessions
 - **CORS** enabled for cross-origin requests
 - **RESTful API** design with consistent response formatting
+- **Data Validation** with express-validator
+- **Password Encryption** using bcryptjs
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn package manager
+- **Node.js** (v16 or higher)
+- **MySQL** (v8.0 or higher)
+- **npm or yarn** package manager
 - Modern web browser
 
 ### Installation
@@ -63,13 +84,33 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
    npm install
    ```
 
-3. **Start the backend server**
+3. **Set up the database**
    ```bash
-   node backend/server-test.js
+   # Install MySQL if not already installed
+   brew install mysql  # On macOS
+   
+   # Start MySQL service
+   brew services start mysql
+   
+   # Create database and import schema
+   mysql -u root -p < database_schema.sql
    ```
-   Backend will run on `http://localhost:5001`
 
-4. **Start the frontend development server**
+4. **Configure environment**
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env file with your database credentials
+   ```
+
+5. **Start the backend server**
+   ```bash
+   cd backend
+   npm start
+   ```
+   Backend will run on `http://localhost:5002`
+
+6. **Start the frontend development server**
    ```bash
    npm start
    ```
@@ -105,6 +146,13 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - `POST /api/auth/login` - User authentication
 - `POST /api/auth/verify` - Token verification
 
+### Users Management
+- `GET /api/users` - Get all users (Admin only)
+- `GET /api/users/:id` - Get specific user (Admin only)
+- `POST /api/users` - Create new user (Admin only)
+- `PUT /api/users/:id` - Update user (Admin only)
+- `DELETE /api/users/:id` - Delete user (Admin only)
+
 ### Inventory
 - `GET /api/inventory/summary` - Inventory summary statistics
 - `GET /api/products` - Product listing with pagination
@@ -114,6 +162,18 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - `POST /api/sales` - Process sales transactions
 
 ## 📝 Recent Updates
+
+### v0.2.0 - Advanced User Management System
+- ✨ Complete Users management interface with CRUD operations
+- 🎯 Advanced search and filtering capabilities
+- 📊 User statistics dashboard with role-based metrics
+- 🔧 Bulk operations for efficient user management
+- 🎨 Modern UI with responsive design and visual feedback
+- 📤 CSV export functionality for user data
+- 🔐 Enhanced password validation with strength indicators
+- 💾 Production MySQL database integration
+- 🔔 Toast notification system for better UX
+- 📱 Mobile-responsive design improvements
 
 ### v0.1.0 - Major Architecture Overhaul
 - ✨ Centralized API service implementation

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import Layout from '../layout/Layout';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ShoppingCart, Search, Filter, Package } from 'lucide-react';
+import PageHeader from '../common/PageHeader';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { apiService } from '../../services/api';
 
@@ -39,19 +40,106 @@ const POSScreen: React.FC = () => {
 
   const TAX_RATE = 0.1; // 10% tax
 
+  const filterProducts = useCallback(() => {
+    let filtered = products;
+    
+    if (searchTerm) {
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.barcode.includes(searchTerm)
+      );
+    }
+    
+    if (selectedCategory) {
+      filtered = filtered.filter(product =>
+        product.category === selectedCategory || product.category_name === selectedCategory
+      );
+    }
+    
+    setFilteredProducts(filtered);
+  }, [products, searchTerm, selectedCategory]);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
     filterProducts();
-  }, [searchTerm, selectedCategory, products]);
+  }, [filterProducts]);
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
       
-      // Fetch all products
+      // Try to fetch from test server first
+      try {
+        const productsResponse = await fetch('http://localhost:5001/api/products', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (productsResponse.ok) {
+          const productsData = await productsResponse.json();
+          console.log('Products response:', productsData);
+          
+          // Handle test server response format
+          let productsList = [];
+          if (productsData.data && Array.isArray(productsData.data)) {
+            productsList = productsData.data;
+          } else if (Array.isArray(productsData)) {
+            productsList = productsData;
+          }
+          
+          // Map products to correct structure
+          const mappedProducts = productsList.map((product: any) => ({
+            ...product,
+            id: String(product.id), // Ensure ID is string
+            category: product.category_name || product.category || 'Unknown',
+            stock: product.stock_quantity || product.stock || 0,
+            stock_quantity: product.stock_quantity || product.stock || 0
+          }));
+          
+          console.log('Mapped products:', mappedProducts);
+          
+          // Fetch categories
+          try {
+            const categoriesResponse = await fetch('http://localhost:5001/api/categories', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            let categoriesList = [];
+            if (categoriesResponse.ok) {
+              const categoriesData = await categoriesResponse.json();
+              console.log('Categories response:', categoriesData);
+              
+              if (categoriesData.data && Array.isArray(categoriesData.data)) {
+                categoriesList = categoriesData.data;
+              } else if (Array.isArray(categoriesData)) {
+                categoriesList = categoriesData;
+              }
+            }
+            
+            setProducts(mappedProducts);
+            setCategories(categoriesList);
+            setFilteredProducts(mappedProducts);
+            return;
+          } catch (categoryError) {
+            console.warn('Failed to fetch categories:', categoryError);
+            setProducts(mappedProducts);
+            setFilteredProducts(mappedProducts);
+            return;
+          }
+        }
+      } catch (testServerError) {
+        console.warn('Test server not available, trying paginated API:', testServerError);
+      }
+      
+      // Fallback to paginated API approach
       let allProducts: any[] = [];
       let currentPage = 1;
       let totalPages = 1;
@@ -88,6 +176,7 @@ const POSScreen: React.FC = () => {
         // Map products to correct structure
         const productsList = allProducts.map((product: any) => ({
           ...product,
+          id: String(product.id), // Ensure ID is string
           category: product.category_name || product.category,
           stock: product.stock_quantity || product.stock || 0
         }));
@@ -106,25 +195,6 @@ const POSScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const filterProducts = () => {
-    let filtered = products;
-    
-    if (searchTerm) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.barcode.includes(searchTerm)
-      );
-    }
-    
-    if (selectedCategory) {
-      filtered = filtered.filter(product =>
-        product.category === selectedCategory || product.category_name === selectedCategory
-      );
-    }
-    
-    setFilteredProducts(filtered);
   };
 
   const addToCart = (product: Product) => {
@@ -202,8 +272,51 @@ const POSScreen: React.FC = () => {
 
     try {
       // Build items payload (use product id and quantity)
-      const itemsPayload = cart.map(item => ({ id: item.product.id, quantity: item.quantity }));
+      const itemsPayload = cart.map(item => ({ 
+        id: parseInt(item.product.id), // Convert to number for test server
+        quantity: item.quantity 
+      }));
 
+      // Try test server format first
+      const response = await fetch('http://localhost:5001/api/sales', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items: itemsPayload })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Sale result:', result);
+        
+        const { soldItems, data } = result;
+        const summary = data?.summary;
+        
+        // Update local products stock based on soldItems from server
+        if (soldItems && Array.isArray(soldItems)) {
+          const updatedProducts = products.map(p => {
+            const sold = soldItems.find((s: any) => String(s.id) === String(p.id));
+            if (sold) {
+              return { ...p, stock: Math.max(0, p.stock - sold.quantity) };
+            }
+            return p;
+          });
+          setProducts(updatedProducts);
+        }
+
+        // Dispatch event with summary and sold items so dashboards can update
+        window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
+          detail: { summary, soldItems } 
+        }));
+
+        alert('Sale completed successfully!');
+        clearCart();
+        return;
+      }
+
+      // Fallback to apiService if test server format fails
       const result = await apiService.processSale(itemsPayload);
 
       if (!result.success) {
@@ -234,57 +347,134 @@ const POSScreen: React.FC = () => {
       clearCart();
     } catch (error) {
       console.error('Error completing sale:', error);
-      alert('Error completing sale. See console for details.');
+      alert('Error completing sale. Please check your connection and try again.');
     }
   };
 
   const { subtotal, tax, total } = getCartTotals();
 
+  const getHeaderActions = () => (
+    <>
+      <button 
+        onClick={() => {
+          // Trigger initialization of products from ProductManagement
+          window.dispatchEvent(new CustomEvent('initializeProducts'));
+          // Refresh the data after a short delay
+          setTimeout(() => {
+            fetchData();
+          }, 1000);
+        }}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        <Package className="w-4 h-4" />
+        Initialize Products
+      </button>
+      <button 
+        onClick={fetchData}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        <Filter className="w-4 h-4" />
+        Refresh
+      </button>
+      <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+        <Package className="w-4 h-4" />
+        Inventory
+      </button>
+    </>
+  );
+
   if (loading) {
     return (
-      <Layout title="Point of Sale">
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <PageHeader
+          title="Point of Sale"
+          description="Process customer transactions and sales"
+          icon={<ShoppingCart className="w-8 h-8 text-green-600" />}
+          actions={getHeaderActions()}
+        />
         <div className="flex justify-center items-center h-64">
           <div className="text-lg">Loading POS system...</div>
         </div>
-      </Layout>
+      </div>
     );
   }
   return (
-    <Layout title="Point of Sale">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <PageHeader
+        title="Point of Sale"
+        description="Process customer transactions and sales"
+        icon={<ShoppingCart className="w-8 h-8 text-green-600" />}
+        actions={getHeaderActions()}
+      />
+
+      {/* Debug Info (can remove in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm">
+          <strong>Debug:</strong> Products: {products.length}, Filtered: {filteredProducts.length}, Categories: {categories.length}
+          {products.length === 0 && (
+            <span className="text-red-600 ml-2">- No products loaded. Try "Initialize Products" button.</span>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Product Search and Selection */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Product Search</h3>
-            <div className="flex gap-4 mb-4">
-              <input
-                type="text"
-                placeholder="Search products by name, barcode, or brand..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.name}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+          <div className="bg-white rounded-lg shadow-sm">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Search className="w-5 h-5 text-blue-600" />
+                Product Search
+              </h3>
+              <div className="flex gap-4 mb-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Search products by name, barcode, or brand..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-sm text-gray-600 mb-2">
+                Found {filteredProducts.length} products
+              </div>
             </div>
-            <div className="text-sm text-gray-600 mb-2">
-              Found {filteredProducts.length} products
-            </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow mt-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Products</h3>
-            {filteredProducts.length > 0 ? (
+            
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Package className="w-5 h-5 text-green-600" />
+                Products ({filteredProducts.length} of {products.length})
+              </h3>
+            {products.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                <p className="text-lg font-medium">No products loaded</p>
+                <p className="text-sm mb-4">Click "Initialize Products" to load the product catalog</p>
+                <button 
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('initializeProducts'));
+                    setTimeout(() => fetchData(), 1000);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Initialize Products
+                </button>
+              </div>
+            ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
                 {filteredProducts.map((product) => (
                   <div
@@ -312,6 +502,7 @@ const POSScreen: React.FC = () => {
                 <p className="text-sm">Try adjusting your search criteria</p>
               </div>
             )}
+            </div>
           </div>
         </div>
 
@@ -397,7 +588,7 @@ const POSScreen: React.FC = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 
