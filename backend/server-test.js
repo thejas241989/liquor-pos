@@ -514,59 +514,139 @@ app.post('/api/sales', (req, res) => {
 // Mock report endpoints
 app.get('/api/reports/:reportId', (req, res) => {
   const { reportId } = req.params;
-  const { range = 'today' } = req.query;
+  const { range, start_date, end_date } = req.query;
+
+  // Determine the actual range type
+  let actualRange = range;
+  if (start_date || end_date) {
+    actualRange = 'custom';
+  } else if (!range) {
+    actualRange = 'today'; // default
+  }
+
+  // Helper function to parse and validate dates
+  const parseDate = (d, isEndDate = false) => {
+    if (!d) return null;
+    const parsed = new Date(d);
+    if (isNaN(parsed.getTime())) return null;
+    
+    // If it's an end date, set it to end of day (23:59:59.999)
+    if (isEndDate) {
+      parsed.setHours(23, 59, 59, 999);
+    }
+    
+    return parsed;
+  };
+
+  // Helper function to check if a date is in range
+  const isDateInRange = (dateStr, startDate, endDate, rangeType) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    
+    // If specific dates provided, use them
+    if (startDate && endDate) {
+      return date >= startDate && date <= endDate;
+    }
+    if (startDate) {
+      return date >= startDate;
+    }
+    if (endDate) {
+      return date <= endDate;
+    }
+    
+    // Default range logic based on rangeType parameter
+    switch (rangeType) {
+      case 'today':
+        return date.toDateString() === today.toDateString();
+      case 'yesterday':
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return date.toDateString() === yesterday.toDateString();
+      case 'this_week':
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+        return date >= weekStart && date <= today;
+      case 'this_month':
+        return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+      case 'last_30_days':
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        return date >= thirtyDaysAgo && date <= today;
+      default:
+        return date.toDateString() === today.toDateString();
+    }
+  };
+
+  const startDate = parseDate(start_date);
+  const endDate = parseDate(end_date, true); // true for end date
+
+  console.log(`Report: ${reportId}, Range: ${range}, Start: ${start_date}, End: ${end_date}`);
+  console.log(`Sales history length: ${salesHistory.length}`);
 
   // Simple mock responses for selected report types
   switch (reportId) {
     case 'daily-sales': {
-      const qsStart = req.query.start_date;
-      const qsEnd = req.query.end_date;
-
-      // New category-wise daily sales format
+      // New category-wise daily sales format with enhanced date filtering
       try {
         if (Array.isArray(salesHistory) && salesHistory.length > 0) {
-          const parseDate = (d) => d ? new Date(d) : null;
-          const startDate = parseDate(qsStart);
-          const endDate = parseDate(qsEnd);
-          const inRange = (d) => {
-            const t = new Date(d);
-            if (startDate && endDate) return t >= startDate && t <= endDate;
-            if (startDate) return t >= startDate;
-            if (endDate) return t <= endDate;
-            const today = new Date();
-            return t.toDateString() === today.toDateString();
-          };
-
-          const filtered = salesHistory.filter(s => inRange(s.sale_date));
+          const filtered = salesHistory.filter(s => isDateInRange(s.sale_date, startDate, endDate, actualRange));
+          
+          console.log(`Filtered ${filtered.length} sales from ${salesHistory.length} total sales`);
           
           // Create category-wise aggregated rows
-          const rows = [];
+          const categoryGroups = {};
           
           filtered.forEach(sale => {
             sale.items.forEach(item => {
               // Find product to get category
               const product = products.find(p => p.id === item.product_id);
               const category = product ? categories.find(c => c.id === product.category_id) : null;
+              const categoryName = category ? category.name : 'Unknown';
               
-              rows.push({
-                category: category ? category.name : 'Unknown',
+              // Group by category
+              if (!categoryGroups[categoryName]) {
+                categoryGroups[categoryName] = [];
+              }
+              
+              categoryGroups[categoryName].push({
+                category: categoryName,
                 product: item.product_name,
                 unit_price: item.unit_price,
                 quantity: item.quantity,
-                total_amount: item.subtotal
+                total_amount: item.subtotal,
+                sale_date: sale.sale_date
               });
             });
           });
 
+          // Sort categories alphabetically and flatten rows
+          const rows = [];
+          const sortedCategories = Object.keys(categoryGroups).sort();
+          
+          sortedCategories.forEach(categoryName => {
+            // Sort products within each category alphabetically
+            const categoryRows = categoryGroups[categoryName].sort((a, b) => 
+              a.product.localeCompare(b.product)
+            );
+            rows.push(...categoryRows);
+          });
+
           const totals = {
             total_quantity: rows.reduce((sum, r) => sum + r.quantity, 0),
-            total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0)
+            total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0),
+            total_transactions: filtered.length
           };
 
           return res.json({ 
             message: 'Daily sales report (category-wise)', 
             data: { 
-              range: { start_date: qsStart, end_date: qsEnd }, 
+              range: { 
+                type: actualRange,
+                start_date: start_date || null, 
+                end_date: end_date || null,
+                actual_start: filtered.length > 0 ? filtered[0].sale_date : null,
+                actual_end: filtered.length > 0 ? filtered[filtered.length - 1].sale_date : null
+              }, 
               rows, 
               totals 
             } 
@@ -576,23 +656,35 @@ app.get('/api/reports/:reportId', (req, res) => {
         console.error('Error aggregating salesHistory for daily-sales:', e);
       }
 
-      // Fallback mock data with category-wise format
+      // Fallback mock data with category-wise format (grouped by category)
       const rows = [
-        { category: 'Whiskey', product: 'Royal Stag Reserve 750ml', unit_price: 950, quantity: 3, total_amount: 2850 },
+        // Beer category
         { category: 'Beer', product: 'Kingfisher Premium 330ml', unit_price: 120, quantity: 10, total_amount: 1200 },
+        
+        // Rum category  
+        { category: 'Rum', product: 'Old Monk 750ml', unit_price: 550, quantity: 4, total_amount: 2200 },
+        
+        // Vodka category
         { category: 'Vodka', product: 'Romanov Vodka 750ml', unit_price: 800, quantity: 2, total_amount: 1600 },
-        { category: 'Rum', product: 'Old Monk 750ml', unit_price: 550, quantity: 4, total_amount: 2200 }
+        
+        // Whiskey category
+        { category: 'Whiskey', product: 'Royal Stag Reserve 750ml', unit_price: 950, quantity: 3, total_amount: 2850 }
       ];
       
       const totals = {
         total_quantity: rows.reduce((sum, r) => sum + r.quantity, 0),
-        total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0)
+        total_amount: rows.reduce((sum, r) => sum + r.total_amount, 0),
+        total_transactions: 1
       };
 
       return res.json({ 
-        message: 'Daily sales report (category-wise)', 
+        message: 'Daily sales report (category-wise) - Mock Data', 
         data: { 
-          range: { start_date: qsStart, end_date: qsEnd }, 
+          range: { 
+            type: range,
+            start_date: start_date || null, 
+            end_date: end_date || null 
+          }, 
           rows, 
           totals 
         } 
@@ -600,40 +692,167 @@ app.get('/api/reports/:reportId', (req, res) => {
     }
 
     case 'monthly-sales': {
-      const qsStart = req.query.start_date;
-      const qsEnd = req.query.end_date;
-      // Mock monthly summary and a few transactions
+      // Enhanced monthly sales with real data support
+      try {
+        if (Array.isArray(salesHistory) && salesHistory.length > 0) {
+          const filtered = salesHistory.filter(s => isDateInRange(s.sale_date, startDate, endDate, actualRange));
+          
+          // Aggregate sales by day
+          const dailySales = {};
+          let totalSales = 0;
+          let totalTransactions = filtered.length;
+          
+          filtered.forEach(sale => {
+            const saleDate = new Date(sale.sale_date).toISOString().split('T')[0];
+            if (!dailySales[saleDate]) {
+              dailySales[saleDate] = 0;
+            }
+            dailySales[saleDate] += sale.total_amount;
+            totalSales += sale.total_amount;
+          });
+          
+          // Get top performing days
+          const topDays = Object.entries(dailySales)
+            .map(([date, revenue]) => ({ date, revenue }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10);
+          
+          const averageTicket = totalTransactions > 0 ? totalSales / totalTransactions : 0;
+          
+          const summary = { 
+            totalSales, 
+            totalTransactions, 
+            averageTicket: Math.round(averageTicket * 100) / 100,
+            salesDays: Object.keys(dailySales).length
+          };
+          
+          return res.json({ 
+            message: 'Monthly sales report (from real data)', 
+            data: { 
+              range: { 
+                type: actualRange,
+                start_date: start_date || null, 
+                end_date: end_date || null 
+              }, 
+              summary, 
+              topDays,
+              dailyBreakdown: dailySales
+            } 
+          });
+        }
+      } catch (e) {
+        console.error('Error aggregating salesHistory for monthly-sales:', e);
+      }
+      
+      // Fallback mock data
       const summary = { totalSales: 950000, totalTransactions: 420, averageTicket: 2261 };
       const topDays = [
         { date: '2025-08-15', revenue: 45000 },
         { date: '2025-08-22', revenue: 52000 },
         { date: '2025-08-29', revenue: 48000 }
       ];
-      return res.json({ message: 'Monthly sales report (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, summary, topDays } });
+      return res.json({ 
+        message: 'Monthly sales report (mock)', 
+        data: { 
+          range: { 
+            type: range,
+            start_date: start_date || null, 
+            end_date: end_date || null 
+          }, 
+          summary, 
+          topDays 
+        } 
+      });
     }
 
     case 'top-products': {
-      const qsStart = req.query.start_date;
-      const qsEnd = req.query.end_date;
-      // Return mock top selling products
+      // Enhanced top products with real data support
+      try {
+        if (Array.isArray(salesHistory) && salesHistory.length > 0) {
+          const filtered = salesHistory.filter(s => isDateInRange(s.sale_date, startDate, endDate, actualRange));
+          
+          // Aggregate products data
+          const productStats = {};
+          
+          filtered.forEach(sale => {
+            sale.items.forEach(item => {
+              const productId = item.product_id;
+              if (!productStats[productId]) {
+                productStats[productId] = {
+                  id: productId,
+                  name: item.product_name,
+                  total_quantity_sold: 0,
+                  total_revenue: 0,
+                  transaction_count: 0
+                };
+              }
+              productStats[productId].total_quantity_sold += item.quantity;
+              productStats[productId].total_revenue += item.subtotal;
+              productStats[productId].transaction_count += 1;
+            });
+          });
+          
+          // Sort by revenue and get top products
+          const topProducts = Object.values(productStats)
+            .sort((a, b) => b.total_revenue - a.total_revenue)
+            .slice(0, 20);
+          
+          return res.json({ 
+            message: 'Top products (from real data)', 
+            data: { 
+              range: { 
+                type: actualRange,
+                start_date: start_date || null, 
+                end_date: end_date || null 
+              }, 
+              topProducts,
+              totalProducts: topProducts.length
+            } 
+          });
+        }
+      } catch (e) {
+        console.error('Error aggregating salesHistory for top-products:', e);
+      }
+      
+      // Fallback mock data
       const topProducts = [
         { id: 11, name: 'Romanov Vodka 750ml', total_quantity_sold: 320, total_revenue: 256000 },
         { id: 1, name: 'Royal Stag Reserve 750ml', total_quantity_sold: 280, total_revenue: 266000 },
         { id: 49, name: 'Kingfisher Premium 330ml', total_quantity_sold: 1200, total_revenue: 144000 }
       ];
-      return res.json({ message: 'Top products (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, topProducts } });
+      return res.json({ 
+        message: 'Top products (mock)', 
+        data: { 
+          range: { 
+            type: range,
+            start_date: start_date || null, 
+            end_date: end_date || null 
+          }, 
+          topProducts 
+        } 
+      });
     }
 
     case 'biller-performance': {
-      const qsStart = req.query.start_date;
-      const qsEnd = req.query.end_date;
-      // Mock performance per biller/staff
+      // Enhanced biller performance (currently mock since we don't track biller in sales)
+      // TODO: Add biller tracking to sales records in future
       const performance = [
         { biller: 'biller', salesCount: 120, totalSales: 250000 },
         { biller: 'manager', salesCount: 80, totalSales: 200000 },
         { biller: 'admin', salesCount: 25, totalSales: 75000 }
       ];
-      return res.json({ message: 'Biller performance (mock)', data: { range: { start_date: qsStart, end_date: qsEnd }, performance } });
+      return res.json({ 
+        message: 'Biller performance (mock - biller tracking not yet implemented)', 
+        data: { 
+          range: { 
+            type: range,
+            start_date: start_date || null, 
+            end_date: end_date || null 
+          }, 
+          performance,
+          note: "Future enhancement: Add biller_id to sales records for accurate tracking"
+        } 
+      });
     }
 
     case 'current-stock': {
@@ -643,13 +862,79 @@ app.get('/api/reports/:reportId', (req, res) => {
         total_inventory_value: products.reduce((sum, p) => sum + (p.price * p.stock_quantity), 0),
         total_cost_value: products.reduce((sum, p) => sum + (p.cost * p.stock_quantity), 0),
         low_stock_items: products.filter(p => p.stock_quantity <= p.min_stock_level).length,
+        out_of_stock_items: products.filter(p => p.stock_quantity === 0).length,
+        report_generated_at: new Date().toISOString()
       };
-      return res.json({ message: 'Current stock report', data: summary });
+      return res.json({ 
+        message: 'Current stock report', 
+        data: { 
+          range: { 
+            type: 'current',
+            generated_at: new Date().toISOString()
+          }, 
+          summary 
+        } 
+      });
     }
 
     case 'revenue-summary': {
-      const revenue = products.reduce((sum, p) => sum + (p.price * (p.stock_quantity * 0.05)), 0); // mock 5% sold
-      return res.json({ message: 'Revenue summary (mock)', data: { range: { start_date, end_date }, revenue } });
+      // Enhanced revenue summary with real data support
+      try {
+        if (Array.isArray(salesHistory) && salesHistory.length > 0) {
+          const filtered = salesHistory.filter(s => isDateInRange(s.sale_date, startDate, endDate, actualRange));
+          
+          const revenue = filtered.reduce((sum, sale) => sum + sale.total_amount, 0);
+          const transactions = filtered.length;
+          const averageTransactionValue = transactions > 0 ? revenue / transactions : 0;
+          
+          // Calculate revenue by category
+          const categoryRevenue = {};
+          filtered.forEach(sale => {
+            sale.items.forEach(item => {
+              const product = products.find(p => p.id === item.product_id);
+              const category = product ? categories.find(c => c.id === product.category_id) : null;
+              const categoryName = category ? category.name : 'Unknown';
+              
+              if (!categoryRevenue[categoryName]) {
+                categoryRevenue[categoryName] = 0;
+              }
+              categoryRevenue[categoryName] += item.subtotal;
+            });
+          });
+          
+          return res.json({ 
+            message: 'Revenue summary (from real data)', 
+            data: { 
+              range: { 
+                type: actualRange,
+                start_date: start_date || null, 
+                end_date: end_date || null 
+              }, 
+              revenue,
+              transactions,
+              averageTransactionValue: Math.round(averageTransactionValue * 100) / 100,
+              categoryBreakdown: categoryRevenue
+            } 
+          });
+        }
+      } catch (e) {
+        console.error('Error aggregating salesHistory for revenue-summary:', e);
+      }
+      
+      // Fallback calculation based on stock movement (mock 5% sold)
+      const revenue = products.reduce((sum, p) => sum + (p.price * (p.stock_quantity * 0.05)), 0);
+      return res.json({ 
+        message: 'Revenue summary (estimated from stock)', 
+        data: { 
+          range: { 
+            type: actualRange,
+            start_date: start_date || null, 
+            end_date: end_date || null 
+          }, 
+          revenue: Math.round(revenue * 100) / 100,
+          note: "Estimated based on 5% of current stock value"
+        } 
+      });
     }
 
     default:

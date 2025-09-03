@@ -71,16 +71,26 @@ const DailySalesReport: React.FC<{ data: any }> = ({ data }) => {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => (
-              <tr key={`${r.product}-${idx}`} className="border-t">
-                <td className="px-4 py-2">{idx + 1}</td>
-                <td className="px-4 py-2">{r.category}</td>
-                <td className="px-4 py-2">{r.product}</td>
-                <td className="px-4 py-2 text-right">{formatCurrency(r.unitPrice)}</td>
-                <td className="px-4 py-2 text-right">{r.quantity}</td>
-                <td className="px-4 py-2 text-right">{formatCurrency(r.totalAmount)}</td>
-              </tr>
-            ))}
+            {rows.map((r, idx) => {
+              const isFirstInCategory = idx === 0 || rows[idx - 1].category !== r.category;
+              const isLastInCategory = idx === rows.length - 1 || rows[idx + 1].category !== r.category;
+              
+              return (
+                <tr 
+                  key={`${r.product}-${idx}`} 
+                  className={`border-t ${isFirstInCategory ? 'border-t-2 border-gray-300' : ''}`}
+                >
+                  <td className="px-4 py-2">{idx + 1}</td>
+                  <td className={`px-4 py-2 ${isFirstInCategory ? 'font-semibold bg-gray-50' : 'text-gray-400'}`}>
+                    {isFirstInCategory ? r.category : ''}
+                  </td>
+                  <td className="px-4 py-2">{r.product}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(r.unitPrice)}</td>
+                  <td className="px-4 py-2 text-right">{r.quantity}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(r.totalAmount)}</td>
+                </tr>
+              );
+            })}
             {rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No records</td>
