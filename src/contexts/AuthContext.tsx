@@ -64,7 +64,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      console.log('Attempting login with:', { username });
       const data = await apiService.login(username, password);
+      console.log('Login API response:', data);
       
       setToken(data.token);
       setUser(data.user);

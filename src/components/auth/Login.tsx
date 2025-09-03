@@ -6,6 +6,7 @@ const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { login, isAuthenticated, user } = useAuth();
 
   function getDefaultRedirect(role?: string): string {
@@ -27,15 +28,20 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
+      setError('Please enter both username and password');
       return;
     }
 
     setLoading(true);
+    setError(null);
+    
+    console.log('Form submitting with:', { username: username.trim(), password });
+    
     const success = await login(username.trim(), password);
     setLoading(false);
 
-    if (success) {
-      // Login will trigger useEffect and redirect
+    if (!success) {
+      setError('Login failed. Please check your credentials and try again.');
     }
   };
 
@@ -56,6 +62,12 @@ const Login: React.FC = () => {
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="text-red-800 text-sm">{error}</div>
+            </div>
+          )}
+          
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="username" className="sr-only">

@@ -56,13 +56,17 @@ class ApiService {
 
   // Auth endpoints
   async login(username: string, password: string): Promise<any> {
+    console.log('API Service login called with:', { username });
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
 
+    console.log('Login response status:', response.status);
     const data = await response.json();
+    console.log('Login response data:', data);
+    
     if (!response.ok) {
       throw new Error(data.message || 'Login failed');
     }
