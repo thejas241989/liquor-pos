@@ -70,7 +70,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(data.user);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      console.log('Login successful!');
+      
+      console.log('Login successful for user:', data.user.username, 'with role:', data.user.role);
+      
       return true;
     } catch (error) {
       console.error('Login failed:', error);

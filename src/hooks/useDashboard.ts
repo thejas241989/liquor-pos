@@ -8,6 +8,7 @@ export const useDashboardData = () => {
     totalCategories: 0,
     lowStockItems: 0,
     totalInventoryValue: 0,
+    totalCostValue: 0, // added: cost-based inventory value
   });
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -32,6 +33,7 @@ export const useDashboardData = () => {
         totalCategories: summary.total_categories || 0,
         lowStockItems: summary.low_stock_items || 0,
         totalInventoryValue: summary.total_inventory_value || 0,
+        totalCostValue: summary.total_cost_value || 0, // use backend cost value
       });
 
       // Process products data
@@ -81,6 +83,7 @@ export const useDashboardData = () => {
           totalCategories: summary.total_categories ?? prev.totalCategories,
           lowStockItems: summary.low_stock_items ?? prev.lowStockItems,
           totalInventoryValue: summary.total_inventory_value ?? prev.totalInventoryValue,
+          totalCostValue: summary.total_cost_value ?? prev.totalCostValue,
         }));
       }
 
@@ -144,7 +147,8 @@ export const useInventorySummary = () => {
       const detail = e.detail;
       const summary = detail?.summary || detail;
       if (summary) {
-        setSummary(summary);
+        // ensure we include cost value if present
+        setSummary((prev: any) => ({ ...(prev || {}), ...summary }));
       }
     };
 

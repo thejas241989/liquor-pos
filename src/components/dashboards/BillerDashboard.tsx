@@ -8,7 +8,8 @@ import {
   CreditCard, 
   AlertCircle,
   RefreshCw,
-  Receipt
+  Receipt,
+  HelpCircle
 } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -86,6 +87,9 @@ const BillerDashboard: React.FC = () => {
     );
   }
 
+  const retailValue = summary?.total_inventory_value ?? 0;
+  const costValue = summary?.total_cost_value ?? 0;
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <PageHeader
@@ -101,10 +105,21 @@ const BillerDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Inventory Value</p>
-              <p className="text-2xl font-bold text-green-600">{
-                loading ? 'Loading...' : formatCurrency(Number(summary?.total_inventory_value || 0))
-              }</p>
-              <p className="text-xs text-gray-500">Value of all stocked items</p>
+              <div className="flex flex-col">
+                <div className="text-2xl font-bold text-green-600">{loading ? 'Loading...' : formatCurrency(Number(costValue || 0))}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Cost Value</span>
+                  <span title="Cost value = sum of (product cost × current stock). Represents inventory carrying value." className="inline-block">
+                    <HelpCircle className="w-4 h-4 text-gray-400" />
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500 mt-1 flex items-center">
+                  <span>Retail: {formatCurrency(Number(retailValue || 0))}</span>
+                  <span title="Retail value = sum of (selling price × current stock). Useful for revenue estimation." className="inline-block ml-2">
+                    <HelpCircle className="w-4 h-4 text-gray-400" />
+                  </span>
+                </div>
+              </div>
             </div>
             <DollarSign className="w-8 h-8 text-green-600" />
           </div>

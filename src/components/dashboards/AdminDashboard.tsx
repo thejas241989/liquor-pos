@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, AlertCircle, Plus, DollarSign, Package, FileText, Settings } from 'lucide-react';
+import { BarChart3, AlertCircle, Plus, DollarSign, Package, FileText, Settings, HelpCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { useDashboardData } from '../../hooks/useDashboard';
 import PageHeader from '../common/PageHeader';
@@ -12,35 +12,8 @@ const AdminDashboard: React.FC = () => {
   const { stats, products, categories, loading, error, refetch } = useDashboardData();
   const [activeSection, setActiveSection] = useState<'dashboard' | 'users' | 'inventory' | 'reports' | 'pos' | 'products'>('dashboard');
 
-  if (loading) {
-    return (
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-red-500" />
-            <span className="text-red-800">Error loading dashboard: {error}</span>
-          </div>
-          <button 
-            onClick={refetch}
-            className="mt-3 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const retailValue = stats.totalInventoryValue || 0;
+  const costValue = stats.totalCostValue || 0;
 
   const getHeaderActions = () => {
     switch (activeSection) {
@@ -108,7 +81,21 @@ const AdminDashboard: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">System Overview</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalInventoryValue)}</div>
+                <div className="flex flex-col">
+                  <div className="text-2xl font-bold text-green-600">{formatCurrency(costValue)}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Cost Value</span>
+                    <span title="Cost value = sum of (product cost × current stock). Represents inventory carrying value." className="inline-block">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1 flex items-center">
+                    <span>Retail: {formatCurrency(retailValue)}</span>
+                    <span title="Retail value = sum of (selling price × current stock). Useful for revenue estimation." className="inline-block ml-2">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </span>
+                  </div>
+                </div>
                 <div className="text-sm text-green-600">Total Inventory Value</div>
               </div>
               <div className="bg-blue-50 p-4 rounded-lg">

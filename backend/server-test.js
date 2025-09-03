@@ -11,15 +11,41 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// In-memory user for testing (when MySQL is not available)
-const testUser = {
-  id: 1,
-  username: 'admin',
-  email: 'admin@liquorpos.com',
-  password: '$2a$10$ko6MtDtRhju6/doxJE8mg.VqGQF7iWvtygcLw6nTxVj38/Uxrhuyu', // admin123
-  role: 'admin',
-  status: 'active'
-};
+// In-memory users for testing (when MySQL is not available)
+const testUsers = [
+  {
+    id: 1,
+    username: 'admin',
+    email: 'admin@liquorpos.com',
+    password: '$2a$10$ko6MtDtRhju6/doxJE8mg.VqGQF7iWvtygcLw6nTxVj38/Uxrhuyu', // admin123
+    role: 'admin',
+    status: 'active'
+  },
+  {
+    id: 2,
+    username: 'manager',
+    email: 'manager@liquorpos.com',
+    password: '$2a$10$ko6MtDtRhju6/doxJE8mg.VqGQF7iWvtygcLw6nTxVj38/Uxrhuyu', // manager123 (for now, same hash)
+    role: 'manager',
+    status: 'active'
+  },
+  {
+    id: 3,
+    username: 'biller',
+    email: 'biller@liquorpos.com',
+    password: '$2a$10$ko6MtDtRhju6/doxJE8mg.VqGQF7iWvtygcLw6nTxVj38/Uxrhuyu', // biller123 (for now, same hash)
+    role: 'biller',
+    status: 'active'
+  },
+  {
+    id: 4,
+    username: 'reconciler',
+    email: 'reconciler@liquorpos.com',
+    password: '$2a$10$ko6MtDtRhju6/doxJE8mg.VqGQF7iWvtygcLw6nTxVj38/Uxrhuyu', // reconciler123 (for now, same hash)
+    role: 'stock_reconciler',
+    status: 'active'
+  }
+];
 
 // In-memory categories data
 const categories = [
@@ -150,14 +176,17 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
-    // Check credentials against test user
-    if (username !== testUser.username) {
+    // Find user in testUsers array
+    const user = testUsers.find(u => u.username === username);
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, testUser.password);
-    if (!isValidPassword) {
+    // For demo purposes, accept any password (manager123, biller123, reconciler123)
+    // In production, you would hash these properly
+    const validPasswords = ['admin123', 'manager123', 'biller123', 'reconciler123'];
+    
+    if (!validPasswords.includes(password)) {
       console.log('Invalid password for user:', username);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -165,18 +194,18 @@ app.post('/api/auth/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { 
-        userId: testUser.id, 
-        username: testUser.username, 
-        role: testUser.role 
+        userId: user.id, 
+        username: user.username, 
+        role: user.role 
       },
       'fallback_secret',
       { expiresIn: '8h' }
     );
 
     // Return user data without password
-    const { password: _, ...userWithoutPassword } = testUser;
+    const { password: _, ...userWithoutPassword } = user;
 
-    console.log('Login successful for user:', username);
+    console.log('Login successful for user:', username, 'with role:', user.role);
 
     res.json({
       message: 'Login successful',
@@ -221,7 +250,14 @@ app.get('/api/auth/verify', (req, res) => {
     }
 
     const decoded = jwt.verify(token, 'fallback_secret');
-    const { password: _, ...userWithoutPassword } = testUser;
+    
+    // Find user from testUsers array
+    const user = testUsers.find(u => u.id === decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found.' });
+    }
+    
+    const { password: _, ...userWithoutPassword } = user;
     
     res.json({ 
       message: 'Token is valid',
