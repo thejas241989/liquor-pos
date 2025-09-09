@@ -27,12 +27,52 @@ const CategoryManagement: React.FC = () => {
     let mounted = true;
     const fetchCategories = async () => {
       try {
-        const res = await fetch('/api/categories');
-        const json = await res.json();
-        const list = Array.isArray(json) ? json : (json.categories && Array.isArray(json.categories)) ? json.categories : (json.data && Array.isArray(json.data)) ? json.data : [];
-        if (mounted) setCategories(list);
+        const token = localStorage.getItem('token');
+        
+        // Try test endpoint first
+        let res = await fetch('http://localhost:5002/api/categories/test', {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // If test endpoint fails, try authenticated endpoint
+        if (!res.ok && token) {
+          res = await fetch('http://localhost:5002/api/categories', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        if (res.ok) {
+          const json = await res.json();
+          console.log('Categories loaded in CategoryManagement:', json);
+          
+          // Map MongoDB categories to correct structure
+          let list = [];
+          if (json.data && Array.isArray(json.data)) {
+            list = json.data.map((cat: any) => ({
+              id: String(cat._id || cat.id),
+              name: cat.name,
+              description: cat.description || ''
+            }));
+          } else if (Array.isArray(json)) {
+            list = json.map((cat: any) => ({
+              id: String(cat._id || cat.id),
+              name: cat.name,
+              description: cat.description || ''
+            }));
+          }
+          
+          if (mounted) setCategories(list);
+        } else {
+          console.error('Failed to load categories - response not ok');
+        }
       } catch (err) {
         console.error('Failed to load categories', err);
+        if (mounted) setCategories([]);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -52,9 +92,13 @@ const CategoryManagement: React.FC = () => {
 
     setSaving(true);
     try {
-      const res = await fetch('/api/categories', {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5002/api/categories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
 

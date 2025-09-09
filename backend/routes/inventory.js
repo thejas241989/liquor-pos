@@ -1,6 +1,9 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const db = require('../config/database');
+const mongoose = require('mongoose');
+const Product = require('../models/Product');
+const StockInward = require('../models/StockInward');
+const StockReconciliation = require('../models/StockReconciliation');
 const { verifyToken, requireManager, requireStockReconciler } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,7 +12,7 @@ const router = express.Router();
 router.post('/stock-intake', [
   verifyToken,
   requireManager,
-  body('product_id').isInt().withMessage('Valid product ID is required'),
+  body('product_id').isMongoId().withMessage('Valid product ID is required'),
   body('quantity_received').isInt({ min: 1 }).withMessage('Quantity must be a positive integer'),
   body('cost_price').optional().isFloat({ min: 0 }).withMessage('Cost price must be a positive number'),
   body('supplier_name').optional().trim()
@@ -34,49 +37,41 @@ router.post('/stock-intake', [
       notes
     } = req.body;
 
-    const connection = await db.getConnection();
-    
-    try {
-      await connection.beginTransaction();
-
-      // Insert stock intake record
-      const [result] = await connection.execute(`
-        INSERT INTO stock_intake 
-        (product_id, quantity_received, cost_price, supplier_name, supplier_invoice_no, 
-         batch_number, expiry_date, received_by, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        product_id, quantity_received, cost_price, supplier_name, supplier_invoice_no,
-        batch_number, expiry_date, req.user.id, notes
-      ]);
-
-      // Update product stock quantity
-      await connection.execute(
-        'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-        [quantity_received, product_id]
-      );
-
-      // Update cost price if provided
-      if (cost_price) {
-        await connection.execute(
-          'UPDATE products SET cost_price = ? WHERE id = ?',
-          [cost_price, product_id]
-        );
-      }
-
-      await connection.commit();
-
-      res.status(201).json({
-        message: 'Stock intake recorded successfully',
-        intakeId: result.insertId
-      });
-
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
+    // Check if product exists
+    const product = await Product.findById(product_id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
     }
+
+    // Create stock inward record
+    const stockInward = new StockInward({
+      product_id,
+      quantity_received,
+      cost_price: cost_price || product.cost_price,
+      supplier_name,
+      supplier_invoice_no,
+      batch_number,
+      expiry_date,
+      received_by: req.user.id,
+      notes
+    });
+
+    await stockInward.save();
+
+    // Update product stock quantity
+    product.stock_quantity += quantity_received;
+    
+    // Update cost price if provided
+    if (cost_price) {
+      product.cost_price = cost_price;
+    }
+
+    await product.save();
+
+    res.status(201).json({
+      message: 'Stock intake recorded successfully',
+      intakeId: stockInward._id
+    });
 
   } catch (error) {
     console.error('Stock intake error:', error);
@@ -89,23 +84,16 @@ router.get('/stock-intake', [verifyToken, requireManager], async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const [intakes] = await db.execute(`
-      SELECT 
-        si.*,
-        p.name as product_name,
-        p.barcode,
-        u.username as received_by_name
-      FROM stock_intake si
-      LEFT JOIN products p ON si.product_id = p.id
-      LEFT JOIN users u ON si.received_by = u.id
-      ORDER BY si.received_date DESC
-      LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    const intakes = await StockInward.find()
+      .populate('product_id', 'name barcode')
+      .populate('received_by', 'username')
+      .sort({ received_date: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    const [countResult] = await db.execute('SELECT COUNT(*) as total FROM stock_intake');
-    const total = countResult[0].total;
+    const total = await StockInward.countDocuments();
 
     res.json({
       intakes,
@@ -231,35 +219,44 @@ router.get('/reconciliation', [verifyToken, requireStockReconciler], async (req,
 router.get('/summary', [verifyToken], async (req, res) => {
   try {
     // Get total products count
-    const [productStats] = await db.execute(`
-      SELECT 
-        COUNT(*) as total_products,
-        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_products,
-        COUNT(CASE WHEN stock_quantity <= min_stock_level THEN 1 END) as low_stock_items
-      FROM products
-    `);
+    const totalProducts = await Product.countDocuments();
+    const activeProducts = await Product.countDocuments({ status: 'active' });
+    const lowStockItems = await Product.countDocuments({ 
+      $expr: { $lte: ['$stock_quantity', '$min_stock_level'] } 
+    });
 
     // Get categories count
-    const [categoryStats] = await db.execute(`
-      SELECT COUNT(*) as total_categories FROM categories
-    `);
+    const Category = require('../models/Category');
+    const totalCategories = await Category.countDocuments();
 
     // Get inventory value (retail and cost)
-    const [inventoryValue] = await db.execute(`
-      SELECT 
-        COALESCE(SUM(stock_quantity * price), 0) as total_inventory_value,
-        COALESCE(SUM(stock_quantity * COALESCE(cost_price, price * 0.7)), 0) as total_cost_value
-      FROM products 
-      WHERE status = 'active'
-    `);
+    const inventoryStats = await Product.aggregate([
+      { $match: { status: 'active' } },
+      {
+        $group: {
+          _id: null,
+          total_inventory_value: { 
+            $sum: { $multiply: ['$stock_quantity', '$price'] } 
+          },
+          total_cost_value: { 
+            $sum: { 
+              $multiply: [
+                '$stock_quantity', 
+                { $ifNull: ['$cost_price', { $multiply: ['$price', 0.7] }] }
+              ] 
+            } 
+          }
+        }
+      }
+    ]);
 
     const summary = {
-      total_products: productStats[0].total_products,
-      active_products: productStats[0].active_products,
-      total_categories: categoryStats[0].total_categories,
-      low_stock_items: productStats[0].low_stock_items,
-      total_inventory_value: inventoryValue[0].total_inventory_value,
-      total_cost_value: inventoryValue[0].total_cost_value
+      total_products: totalProducts,
+      active_products: activeProducts,
+      total_categories: totalCategories,
+      low_stock_items: lowStockItems,
+      total_inventory_value: inventoryStats[0]?.total_inventory_value || 0,
+      total_cost_value: inventoryStats[0]?.total_cost_value || 0
     };
 
     res.json({

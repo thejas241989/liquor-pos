@@ -441,7 +441,7 @@ const ProductManagement: React.FC = () => {
       let totalPages = 1;
       
       do {
-        const productsResponse = await fetch(`http://localhost:5001/api/products?page=${currentPage}&limit=100`, {
+        const productsResponse = await fetch(`http://localhost:5002/api/products?page=${currentPage}&limit=100`, {
           headers
         });
         
@@ -458,20 +458,36 @@ const ProductManagement: React.FC = () => {
       // Fetch categories - with fallback
       let categoriesList = [];
       try {
-        const categoriesResponse = await fetch('http://localhost:5001/api/categories', {
-          headers
+        // Try test endpoint first
+        let categoriesResponse = await fetch('http://localhost:5002/api/categories/test', {
+          headers: { 'Content-Type': 'application/json' }
         });
+
+        // If test endpoint fails, try authenticated endpoint
+        if (!categoriesResponse.ok) {
+          categoriesResponse = await fetch('http://localhost:5002/api/categories', {
+            headers
+          });
+        }
 
         if (categoriesResponse.ok) {
           const categoriesData = await categoriesResponse.json();
           
           console.log('Categories data from API:', categoriesData);
           
-          // Handle categories
+          // Handle categories with MongoDB structure mapping
           if (categoriesData.data && Array.isArray(categoriesData.data)) {
-            categoriesList = categoriesData.data;
+            categoriesList = categoriesData.data.map((cat: any) => ({
+              id: String(cat._id || cat.id),
+              name: cat.name,
+              description: cat.description || ''
+            }));
           } else if (Array.isArray(categoriesData)) {
-            categoriesList = categoriesData;
+            categoriesList = categoriesData.map((cat: any) => ({
+              id: String(cat._id || cat.id),
+              name: cat.name,
+              description: cat.description || ''
+            }));
           }
         }
       } catch (categoryError) {
@@ -511,7 +527,7 @@ const ProductManagement: React.FC = () => {
       const headers: any = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`http://localhost:5001/api/products/${id}`, {
+      const res = await fetch(`http://localhost:5002/api/products/${id}`, {
         method: 'DELETE',
         headers
       });
@@ -545,8 +561,8 @@ const ProductManagement: React.FC = () => {
       try {
         const method = editingCategory ? 'PUT' : 'POST';
         const url = editingCategory 
-          ? `http://localhost:5001/api/categories/${editingCategory.id}`
-          : 'http://localhost:5001/api/categories';
+          ? `http://localhost:5002/api/categories/${editingCategory.id}`
+          : 'http://localhost:5002/api/categories';
 
         const response = await fetch(url, {
           method,
@@ -610,7 +626,7 @@ const ProductManagement: React.FC = () => {
 
       // Try API first, fallback to local storage
       try {
-        const response = await fetch(`http://localhost:5001/api/categories/${id}`, {
+        const response = await fetch(`http://localhost:5002/api/categories/${id}`, {
           method: 'DELETE',
           headers
         });

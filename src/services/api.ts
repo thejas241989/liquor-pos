@@ -1,5 +1,5 @@
 // API Service for centralized API calls
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'http://localhost:5002/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -79,6 +79,17 @@ class ApiService {
 
   // Inventory endpoints
   async getInventorySummary() {
+    // Try reports endpoint first, then fallback to inventory endpoint
+    try {
+      const response = await this.request('/reports/inventory-summary');
+      if (response.success) {
+        return response;
+      }
+    } catch (error) {
+      console.warn('Reports inventory-summary failed, trying inventory endpoint:', error);
+    }
+    
+    // Fallback to inventory endpoint
     return this.request('/inventory/summary');
   }
 

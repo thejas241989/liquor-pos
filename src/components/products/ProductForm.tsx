@@ -6,7 +6,7 @@ import AdminNavigation from '../common/AdminNavigation';
 
 interface FormState {
   name: string;
-  category_id: number | '';
+  category_id: string | '';
   volume: string;
   price: number | '';
   stock_quantity: number | '';
@@ -32,11 +32,45 @@ const ProductForm: React.FC = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch('/api/categories');
-        const json = await res.json();
-        setCategories(json.data || []);
+        const token = localStorage.getItem('token');
+        
+        // Try test endpoint first
+        let response = await fetch('http://localhost:5002/api/categories/test', {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // If test endpoint fails, try authenticated endpoint
+        if (!response.ok && token) {
+          response = await fetch('http://localhost:5002/api/categories', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        if (response.ok) {
+          const json = await response.json();
+          console.log('Categories loaded in ProductForm:', json);
+          
+          // Map MongoDB categories to correct structure
+          const categoriesList = json.data ? json.data.map((cat: any) => ({
+            id: String(cat._id || cat.id),
+            name: cat.name,
+            description: cat.description || '',
+            volumes: cat.volumes || []
+          })) : [];
+          
+          setCategories(categoriesList);
+        } else {
+          console.error('Failed to load categories - response not ok');
+        }
       } catch (err) {
         console.error('Failed to load categories', err);
+        // Fallback to empty array to prevent component crash
+        setCategories([]);
       }
     };
 
@@ -48,7 +82,8 @@ const ProductForm: React.FC = () => {
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/products/${id}`);
+        // Try test endpoint first
+        const res = await fetch(`http://localhost:5002/api/products/test?id=${id}`);
         if (res.ok) {
           const json = await res.json();
           const p = json.data || json;
@@ -60,6 +95,8 @@ const ProductForm: React.FC = () => {
             stock_quantity: p.stock_quantity || '',
             barcode: p.barcode || ''
           });
+        } else {
+          console.error('Failed to load product for editing');
         }
       } catch (err) {
         console.error('Failed to load product', err);
@@ -86,10 +123,6 @@ const ProductForm: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers: any = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const payload = {
         name: form.name,
         category_id: form.category_id,
@@ -99,24 +132,44 @@ const ProductForm: React.FC = () => {
         barcode: form.barcode
       };
 
+      console.log('Saving product with payload:', payload);
+
       if (id) {
-        // Try server update, otherwise fallback
-        const res = await fetch(`/api/products/${id}`, {
+        // Update existing product
+        const res = await fetch(`http://localhost:5002/api/products/test`, {
           method: 'PUT',
-          headers,
-          body: JSON.stringify(payload)
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ...payload, id })
         });
-        if (!res.ok) {
-          alert('Product update not supported in test server — changes saved locally only.');
+        
+        if (res.ok) {
+          console.log('Product updated successfully');
+        } else {
+          const errorData = await res.json();
+          console.error('Update failed:', errorData);
+          alert('Failed to update product: ' + (errorData.message || 'Unknown error'));
+          return;
         }
       } else {
-        const res = await fetch('/api/products', {
+        // Create new product
+        const res = await fetch('http://localhost:5002/api/products/test', {
           method: 'POST',
-          headers,
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) {
-          alert('Product create not supported in test server — changes saved locally only.');
+        
+        if (res.ok) {
+          const responseData = await res.json();
+          console.log('Product created successfully:', responseData);
+        } else {
+          const errorData = await res.json();
+          console.error('Create failed:', errorData);
+          alert('Failed to create product: ' + (errorData.message || 'Unknown error'));
+          return;
         }
       }
 
@@ -175,7 +228,7 @@ const ProductForm: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Category</label>
-                <select value={String(form.category_id)} onChange={e => handleChange('category_id', Number(e.target.value) || '')} className="mt-1 w-full px-3 py-2 border rounded">
+                <select value={String(form.category_id)} onChange={e => handleChange('category_id', e.target.value || '')} className="mt-1 w-full px-3 py-2 border rounded">
                   <option value="">Select category</option>
                   {categories.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -185,20 +238,28 @@ const ProductForm: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">Volume</label>
-                {(() => {
-                  const selected = categories.find(c => String(c.id) === String(form.category_id));
-                  if (selected && Array.isArray(selected.volumes) && selected.volumes.length > 0) {
-                    return (
-                      <select value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded">
-                        <option value="">Select volume</option>
-                        {selected.volumes.map((v: string) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    );
-                  }
-                  return (<input value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" />);
-                })()}
+                <select value={form.volume} onChange={e => handleChange('volume', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded">
+                  <option value="">Select volume</option>
+                  <option value="50ml">50ml</option>
+                  <option value="90ml">90ml</option>
+                  <option value="180ml">180ml</option>
+                  <option value="330ml">330ml</option>
+                  <option value="375ml">375ml</option>
+                  <option value="500ml">500ml</option>
+                  <option value="650ml">650ml</option>
+                  <option value="750ml">750ml</option>
+                  <option value="1L">1L</option>
+                  <option value="1.5L">1.5L</option>
+                  <option value="custom">Custom Volume</option>
+                </select>
+                {form.volume === 'custom' && (
+                  <input 
+                    type="text" 
+                    placeholder="Enter custom volume (e.g., 700ml, 2L)"
+                    onChange={e => handleChange('volume', e.target.value)} 
+                    className="mt-2 w-full px-3 py-2 border rounded" 
+                  />
+                )}
               </div>
 
               <div>

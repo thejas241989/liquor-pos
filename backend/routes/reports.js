@@ -1,159 +1,552 @@
 const express = require('express');
-const { query } = require('express-validator');
-const db = require('../config/database');
+const { query, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
+const DailyStock = require('../models/DailyStock');
+const { Sale } = require('../models/Sale');
+const Product = require('../models/Product');
+const Category = require('../models/Category');
+const StockReconciliation = require('../models/StockReconciliation');
 const { verifyToken, requireManager } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Sales reports
-router.get('/sales', [
+// Test endpoint
+router.get('/test', (req, res) => {
+  res.json({ message: 'Reports routes are working!', timestamp: new Date() });
+});
+
+// Daily Sales Report
+router.get('/daily-sales', [
   verifyToken,
-  requireManager,
-  query('start_date').optional().isDate().withMessage('Invalid start date'),
-  query('end_date').optional().isDate().withMessage('Invalid end date')
+  query('date').optional().isISO8601().withMessage('Date must be a valid date'),
+  query('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
+  query('end_date').optional().isISO8601().withMessage('End date must be a valid date')
 ], async (req, res) => {
   try {
-    const { start_date, end_date, report_type = 'summary' } = req.query;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
+    }
 
-    let dateFilter = '';
-    let queryParams = [];
-
-    if (start_date && end_date) {
-      dateFilter = 'WHERE DATE(s.sale_date) BETWEEN ? AND ?';
-      queryParams = [start_date, end_date];
-    } else if (start_date) {
-      dateFilter = 'WHERE DATE(s.sale_date) >= ?';
-      queryParams = [start_date];
-    } else if (end_date) {
-      dateFilter = 'WHERE DATE(s.sale_date) <= ?';
-      queryParams = [end_date];
+    const { date, start_date, end_date } = req.query;
+    
+    // Determine date range
+    let startDate, endDate;
+    if (date) {
+      startDate = new Date(date);
+      endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1);
+    } else if (start_date && end_date) {
+      startDate = new Date(start_date);
+      endDate = new Date(end_date);
+      endDate.setDate(endDate.getDate() + 1);
     } else {
       // Default to today
-      dateFilter = 'WHERE DATE(s.sale_date) = CURDATE()';
+      startDate = new Date();
+      endDate = new Date();
+      endDate.setDate(endDate.getDate() + 1);
     }
 
-    if (report_type === 'summary') {
-      // Sales summary report
-      const [summary] = await db.execute(`
-        SELECT 
-          COUNT(*) as total_sales,
-          COALESCE(SUM(s.total_amount), 0) as total_revenue,
-          COALESCE(SUM(s.tax_amount), 0) as total_tax,
-          COALESCE(AVG(s.total_amount), 0) as average_sale,
-          COALESCE(SUM(s.discount_amount), 0) as total_discount
-        FROM sales s
-        ${dateFilter}
-      `, queryParams);
+    // Get sales data for the date range
+    const sales = await Sale.find({
+      sale_date: {
+        $gte: startDate,
+        $lt: endDate
+      }
+    }).populate({
+      path: 'items.product_id',
+      select: 'name category_id price',
+      populate: {
+        path: 'category_id',
+        select: 'name'
+      }
+    });
 
-      // Payment method breakdown
-      const [paymentBreakdown] = await db.execute(`
-        SELECT 
-          s.payment_method,
-          COUNT(*) as count,
-          SUM(s.total_amount) as amount
-        FROM sales s
-        ${dateFilter}
-        GROUP BY s.payment_method
-      `, queryParams);
-
-      res.json({
-        summary: summary[0],
-        paymentBreakdown
+    // Process sales data into category-wise format
+    const categoryData = {};
+    
+    sales.forEach(sale => {
+      sale.items.forEach(item => {
+        const product = item.product_id;
+        const category = product.category_id;
+        const categoryName = category ? category.name : 'Unknown';
+        
+        if (!categoryData[categoryName]) {
+          categoryData[categoryName] = {};
+        }
+        
+        if (!categoryData[categoryName][product.name]) {
+          categoryData[categoryName][product.name] = {
+            category: categoryName,
+            product: product.name,
+            unitPrice: product.price,
+            quantity: 0,
+            totalAmount: 0
+          };
+        }
+        
+        categoryData[categoryName][product.name].quantity += item.quantity;
+        categoryData[categoryName][product.name].totalAmount += item.line_total || (item.quantity * product.price);
       });
+    });
 
-    } else if (report_type === 'detailed') {
-      // Detailed sales report
-      const [sales] = await db.execute(`
-        SELECT 
-          s.*,
-          u.username as biller_name,
-          COUNT(si.id) as items_count
-        FROM sales s
-        LEFT JOIN users u ON s.biller_id = u.id
-        LEFT JOIN sale_items si ON s.id = si.sale_id
-        ${dateFilter}
-        GROUP BY s.id
-        ORDER BY s.sale_date DESC
-      `, queryParams);
+    // Convert to array format
+    const rows = [];
+    Object.values(categoryData).forEach(categoryProducts => {
+      Object.values(categoryProducts).forEach(product => {
+        rows.push(product);
+      });
+    });
 
-      res.json({ sales });
-    }
+    // Sort by category and product name
+    rows.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.product.localeCompare(b.product);
+    });
+
+    const range = date ? { date: date } : { start_date: start_date, end_date: end_date };
+
+    res.json({
+      success: true,
+      data: {
+        rows,
+        range,
+        summary: {
+          total_quantity: rows.reduce((sum, row) => sum + row.quantity, 0),
+          total_amount: rows.reduce((sum, row) => sum + row.totalAmount, 0)
+        }
+      }
+    });
 
   } catch (error) {
-    console.error('Sales report error:', error);
+    console.error('Daily sales report error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Top Products Report
+router.get('/top-products', [
+  verifyToken,
+  query('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
+  query('end_date').optional().isISO8601().withMessage('End date must be a valid date'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
+    }
+
+    const { start_date, end_date, limit = 10 } = req.query;
+    
+    // Determine date range (default to last 30 days)
+    let startDate, endDate;
+    if (start_date && end_date) {
+      startDate = new Date(start_date);
+      endDate = new Date(end_date);
+    } else {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    // Aggregate sales data to get top products
+    const topProducts = await Sale.aggregate([
+      {
+        $match: {
+          sale_date: {
+            $gte: startDate,
+            $lte: endDate
+          }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product_id',
+          total_quantity_sold: { $sum: '$items.quantity' },
+          total_revenue: { $sum: '$items.line_total' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      { $unwind: '$product' },
+      {
+        $project: {
+          _id: 0,
+          id: '$_id',
+          name: '$product.name',
+          total_quantity_sold: 1,
+          total_revenue: 1
+        }
+      },
+      { $sort: { total_quantity_sold: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        topProducts,
+        dateRange: { start_date, end_date },
+        summary: {
+          total_products: topProducts.length,
+          total_quantity: topProducts.reduce((sum, p) => sum + p.total_quantity_sold, 0),
+          total_revenue: topProducts.reduce((sum, p) => sum + p.total_revenue, 0)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Top products report error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Inventory Summary endpoint (for dashboard)
+router.get('/inventory-summary', [verifyToken], async (req, res) => {
+  try {
+    // Get products and categories count
+    const [totalProducts, totalCategories] = await Promise.all([
+      Product.countDocuments({ status: { $ne: 'deleted' } }),
+      Category.countDocuments({ status: { $ne: 'deleted' } })
+    ]);
+
+    // Get inventory summary using aggregation
+    const inventorySummary = await Product.aggregate([
+      {
+        $match: { status: { $ne: 'deleted' } }
+      },
+      {
+        $group: {
+          _id: null,
+          total_inventory_value: { 
+            $sum: { $multiply: ['$stock_quantity', '$price'] }
+          },
+          total_cost_value: { 
+            $sum: { $multiply: ['$stock_quantity', '$cost_price'] }
+          },
+          low_stock_items: {
+            $sum: {
+              $cond: [
+                { $lte: ['$stock_quantity', '$reorderLevel'] },
+                1,
+                0
+              ]
+            }
+          },
+          out_of_stock_items: {
+            $sum: {
+              $cond: [
+                { $eq: ['$stock_quantity', 0] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    const summary = inventorySummary[0] || {
+      total_inventory_value: 0,
+      total_cost_value: 0,
+      low_stock_items: 0,
+      out_of_stock_items: 0
+    };
+
+    res.json({
+      message: 'Inventory summary retrieved successfully',
+      data: {
+        total_products: totalProducts,
+        total_categories: totalCategories,
+        total_inventory_value: summary.total_inventory_value || 0,
+        total_cost_value: summary.total_cost_value || 0,
+        low_stock_items: summary.low_stock_items || 0,
+        out_of_stock_items: summary.out_of_stock_items || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Inventory summary error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Inventory reports
-router.get('/inventory', [verifyToken, requireManager], async (req, res) => {
+// Day-Wise Sales Report
+router.get('/day-wise-sales', [
+  verifyToken,
+  query('startDate').isISO8601().withMessage('Start date must be a valid date'),
+  query('endDate').isISO8601().withMessage('End date must be a valid date'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
   try {
-    const { report_type = 'current_stock' } = req.query;
-
-    if (report_type === 'current_stock') {
-      const [products] = await db.execute(`
-        SELECT 
-          p.*,
-          c.name as category_name,
-          CASE 
-            WHEN p.stock_quantity <= p.min_stock_level THEN 'Low Stock'
-            WHEN p.stock_quantity = 0 THEN 'Out of Stock'
-            ELSE 'In Stock'
-          END as stock_status
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.status = 'active'
-        ORDER BY p.stock_quantity ASC
-      `);
-
-      res.json({ products });
-
-    } else if (report_type === 'low_stock') {
-      const [lowStockProducts] = await db.execute(`
-        SELECT 
-          p.*,
-          c.name as category_name
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.stock_quantity <= p.min_stock_level AND p.status = 'active'
-        ORDER BY (p.stock_quantity / p.min_stock_level) ASC
-      `);
-
-      res.json({ lowStockProducts });
-
-    } else if (report_type === 'stock_movement') {
-      // Stock movement report
-      const [movements] = await db.execute(`
-        SELECT 
-          'Sale' as type,
-          si.product_id,
-          p.name as product_name,
-          -si.quantity as quantity_change,
-          s.sale_date as date,
-          CONCAT('Sale: ', s.invoice_no) as reference
-        FROM sale_items si
-        LEFT JOIN products p ON si.product_id = p.id
-        LEFT JOIN sales s ON si.sale_id = s.id
-        WHERE DATE(s.sale_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        
-        UNION ALL
-        
-        SELECT 
-          'Stock Intake' as type,
-          sint.product_id,
-          p.name as product_name,
-          sint.quantity_received as quantity_change,
-          sint.received_date as date,
-          CONCAT('Intake from: ', COALESCE(sint.supplier_name, 'Unknown')) as reference
-        FROM stock_intake sint
-        LEFT JOIN products p ON sint.product_id = p.id
-        WHERE DATE(sint.received_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        
-        ORDER BY date DESC
-      `);
-
-      res.json({ movements });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
     }
+
+    const { startDate, endDate, page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $match: {
+          date: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      {
+        $unwind: '$product'
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.category_id',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      {
+        $unwind: '$category'
+      },
+      {
+        $group: {
+          _id: {
+            date: '$date',
+            productId: '$product_id',
+            productName: '$product.name',
+            categoryName: '$category.name'
+          },
+          openingStock: { $first: '$opening_stock' },
+          stockInward: { $first: '$stock_inward' },
+          soldQuantity: { $first: '$sold_quantity' },
+          closingStock: { $first: '$closing_stock' },
+          averageSellingPrice: { $first: '$product.price' }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          date: '$_id.date',
+          productName: '$_id.productName',
+          categoryName: '$_id.categoryName',
+          openingStock: 1,
+          stockInward: 1,
+          soldQuantity: 1,
+          closingStock: 1,
+          averageSellingPrice: 1,
+          totalSalesValue: { $multiply: ['$soldQuantity', '$averageSellingPrice'] }
+        }
+      },
+      {
+        $sort: { date: -1, productName: 1 }
+      },
+      {
+        $facet: {
+          reports: [
+            { $skip: skip },
+            { $limit: parseInt(limit) }
+          ],
+          totalCount: [
+            { $count: 'count' }
+          ],
+          summary: [
+            {
+              $group: {
+                _id: null,
+                totalSoldQuantity: { $sum: '$soldQuantity' },
+                totalSalesValue: { $sum: '$totalSalesValue' },
+                totalStockInward: { $sum: '$stockInward' }
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    const result = await DailyStock.aggregate(pipeline);
+    const reports = result[0].reports;
+    const totalCount = result[0].totalCount[0]?.count || 0;
+    const summary = result[0].summary[0] || { totalSoldQuantity: 0, totalSalesValue: 0, totalStockInward: 0 };
+
+    res.json({
+      reports,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / limit),
+        totalRecords: totalCount,
+        limit: parseInt(limit)
+      },
+      summary,
+      dateRange: { startDate, endDate }
+    });
+
+  } catch (error) {
+    console.error('Day-wise sales report error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Inventory Report
+router.get('/inventory', [
+  verifyToken,
+  query('date').optional().isISO8601().withMessage('Date must be a valid date'),
+  query('category').optional().isMongoId().withMessage('Category must be a valid ID'),
+  query('lowStockThreshold').optional().isInt({ min: 0 }).withMessage('Low stock threshold must be a non-negative integer'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
+    }
+
+    const { 
+      date = new Date().toISOString().split('T')[0], 
+      category, 
+      lowStockThreshold = 10,
+      page = 1, 
+      limit = 20 
+    } = req.query;
+    const skip = (page - 1) * limit;
+
+    const matchStage = {
+      date: {
+        $gte: new Date(date),
+        $lt: new Date(new Date(date).getTime() + 24 * 60 * 60 * 1000)
+      }
+    };
+
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      {
+        $unwind: '$product'
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.category_id',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      {
+        $unwind: '$category'
+      }
+    ];
+
+    // Add category filter if provided
+    if (category) {
+      pipeline.push({
+        $match: { 'category._id': new mongoose.Types.ObjectId(category) }
+      });
+    }
+
+    pipeline.push(
+      {
+        $project: {
+          _id: 0,
+          productId: '$product_id',
+          productName: '$product.name',
+          categoryName: '$category.name',
+          currentStock: '$closing_stock',
+          unitPrice: '$product.price',
+          totalValue: { $multiply: ['$closing_stock', '$product.price'] },
+          reorderLevel: '$product.reorderLevel',
+          isLowStock: { $lte: ['$closing_stock', parseInt(lowStockThreshold)] },
+          lastUpdated: '$date'
+        }
+      },
+      {
+        $sort: { categoryName: 1, productName: 1 }
+      },
+      {
+        $facet: {
+          inventory: [
+            { $skip: skip },
+            { $limit: parseInt(limit) }
+          ],
+          totalCount: [
+            { $count: 'count' }
+          ],
+          summary: [
+            {
+              $group: {
+                _id: null,
+                totalProducts: { $sum: 1 },
+                totalStockValue: { $sum: '$totalValue' },
+                lowStockItems: { 
+                  $sum: { 
+                    $cond: [{ $lte: ['$currentStock', parseInt(lowStockThreshold)] }, 1, 0] 
+                  } 
+                },
+                totalQuantity: { $sum: '$currentStock' }
+              }
+            }
+          ]
+        }
+      }
+    );
+
+    console.log('🚀 Running aggregation pipeline with', pipeline.length, 'stages');
+    const result = await DailyStock.aggregate(pipeline);
+    console.log('📊 Aggregation result structure:', {
+      inventory: result[0].inventory.length,
+      totalCount: result[0].totalCount[0]?.count || 0,
+      summary: result[0].summary[0] || {}
+    });
+    
+    const inventory = result[0].inventory;
+    const totalCount = result[0].totalCount[0]?.count || 0;
+    const summary = result[0].summary[0] || { 
+      totalProducts: 0, 
+      totalStockValue: 0, 
+      lowStockItems: 0, 
+      totalQuantity: 0 
+    };
+
+    res.json({
+      inventory,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / limit),
+        totalRecords: totalCount,
+        limit: parseInt(limit)
+      },
+      summary,
+      filters: { date, category, lowStockThreshold }
+    });
 
   } catch (error) {
     console.error('Inventory report error:', error);
@@ -161,234 +554,295 @@ router.get('/inventory', [verifyToken, requireManager], async (req, res) => {
   }
 });
 
-// Top selling products report
-router.get('/top-products', [verifyToken, requireManager], async (req, res) => {
+// Stock Reconciliation Report
+router.get('/stock-reconciliation', [
+  verifyToken,
+  requireManager,
+  query('startDate').optional().isISO8601().withMessage('Start date must be a valid date'),
+  query('endDate').optional().isISO8601().withMessage('End date must be a valid date'),
+  query('status').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Status must be pending, approved, or rejected'),
+  query('reconcilierId').optional().isMongoId().withMessage('Reconciler ID must be a valid ID'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
   try {
-    const { start_date, end_date, limit = 10 } = req.query;
-
-    let dateFilter = '';
-    let queryParams = [];
-
-    if (start_date && end_date) {
-      dateFilter = 'WHERE DATE(s.sale_date) BETWEEN ? AND ?';
-      queryParams = [start_date, end_date];
-    } else {
-      // Default to last 30 days
-      dateFilter = 'WHERE DATE(s.sale_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
     }
 
-    queryParams.push(parseInt(limit));
+    const { 
+      startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      endDate = new Date().toISOString().split('T')[0],
+      status,
+      reconcilierId,
+      page = 1, 
+      limit = 10 
+    } = req.query;
+    const skip = (page - 1) * limit;
 
-    const [topProducts] = await db.execute(`
-      SELECT 
-        p.id,
-        p.name,
-        p.brand,
-        c.name as category_name,
-        SUM(si.quantity) as total_quantity_sold,
-        SUM(si.line_total) as total_revenue,
-        COUNT(DISTINCT s.id) as times_sold,
-        AVG(si.unit_price) as average_price
-      FROM sale_items si
-      LEFT JOIN products p ON si.product_id = p.id
-      LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN sales s ON si.sale_id = s.id
-      ${dateFilter}
-      GROUP BY p.id, p.name, p.brand, c.name
-      ORDER BY total_quantity_sold DESC
-      LIMIT ?
-    `, queryParams);
+    const matchStage = {
+      reconciliationDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    };
 
-    res.json({ topProducts });
-
-  } catch (error) {
-    console.error('Top products report error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Financial summary report
-router.get('/financial', [verifyToken, requireManager], async (req, res) => {
-  try {
-    const { start_date, end_date } = req.query;
-
-    let dateFilter = '';
-    let queryParams = [];
-
-    if (start_date && end_date) {
-      dateFilter = 'WHERE DATE(s.sale_date) BETWEEN ? AND ?';
-      queryParams = [start_date, end_date];
-    } else {
-      // Default to current month
-      dateFilter = 'WHERE MONTH(s.sale_date) = MONTH(CURDATE()) AND YEAR(s.sale_date) = YEAR(CURDATE())';
+    if (status) {
+      matchStage.status = status;
     }
 
-    // Revenue summary
-    const [revenue] = await db.execute(`
-      SELECT 
-        COALESCE(SUM(s.subtotal), 0) as gross_revenue,
-        COALESCE(SUM(s.tax_amount), 0) as total_tax,
-        COALESCE(SUM(s.discount_amount), 0) as total_discount,
-        COALESCE(SUM(s.total_amount), 0) as net_revenue,
-        COUNT(*) as total_transactions
-      FROM sales s
-      ${dateFilter}
-    `, queryParams);
+    if (reconcilierId) {
+      matchStage.reconcilerId = new mongoose.Types.ObjectId(reconcilierId);
+    }
 
-    // Daily revenue trend (last 30 days)
-    const [dailyTrend] = await db.execute(`
-      SELECT 
-        DATE(s.sale_date) as date,
-        COALESCE(SUM(s.total_amount), 0) as daily_revenue,
-        COUNT(*) as daily_transactions
-      FROM sales s
-      WHERE DATE(s.sale_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-      GROUP BY DATE(s.sale_date)
-      ORDER BY date ASC
-    `);
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'reconcilerId',
+          foreignField: '_id',
+          as: 'reconciler'
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'approvedBy',
+          foreignField: '_id',
+          as: 'approver'
+        }
+      },
+      {
+        $unwind: '$reconciler'
+      },
+      {
+        $unwind: { path: '$approver', preserveNullAndEmptyArrays: true }
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.productId',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      {
+        $unwind: '$product'
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      {
+        $unwind: '$category'
+      },
+      {
+        $project: {
+          _id: 0,
+          reconciliationId: '$_id',
+          reconciliationDate: 1,
+          status: 1,
+          reconcilerName: '$reconciler.name',
+          approverName: '$approver.name',
+          approvedAt: 1,
+          productName: '$product.name',
+          categoryName: '$category.name',
+          systemStock: '$items.systemStock',
+          physicalStock: '$items.physicalStock',
+          variance: '$items.variance',
+          unitPrice: '$product.price',
+          varianceValue: { $multiply: ['$items.variance', '$product.price'] },
+          comments: 1
+        }
+      },
+      {
+        $sort: { reconciliationDate: -1, productName: 1 }
+      },
+      {
+        $facet: {
+          reconciliations: [
+            { $skip: skip },
+            { $limit: parseInt(limit) }
+          ],
+          totalCount: [
+            { $count: 'count' }
+          ],
+          summary: [
+            {
+              $group: {
+                _id: null,
+                totalReconciliations: { $addToSet: '$reconciliationId' },
+                totalVarianceValue: { $sum: '$varianceValue' },
+                positiveVariances: { 
+                  $sum: { 
+                    $cond: [{ $gt: ['$variance', 0] }, '$variance', 0] 
+                  } 
+                },
+                negativeVariances: { 
+                  $sum: { 
+                    $cond: [{ $lt: ['$variance', 0] }, '$variance', 0] 
+                  } 
+                }
+              }
+            },
+            {
+              $project: {
+                totalReconciliations: { $size: '$totalReconciliations' },
+                totalVarianceValue: 1,
+                positiveVariances: 1,
+                negativeVariances: 1
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    const result = await StockReconciliation.aggregate(pipeline);
+    const reconciliations = result[0].reconciliations;
+    const totalCount = result[0].totalCount[0]?.count || 0;
+    const summary = result[0].summary[0] || { 
+      totalReconciliations: 0, 
+      totalVarianceValue: 0, 
+      positiveVariances: 0, 
+      negativeVariances: 0 
+    };
 
     res.json({
-      summary: revenue[0],
-      dailyTrend
+      reconciliations,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / limit),
+        totalRecords: totalCount,
+        limit: parseInt(limit)
+      },
+      summary,
+      filters: { startDate, endDate, status, reconcilierId }
     });
 
   } catch (error) {
-    console.error('Financial report error:', error);
+    console.error('Stock reconciliation report error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Generic endpoint to support frontend report keys like /api/reports/daily-sales
-router.get('/:reportId', [verifyToken, requireManager], async (req, res) => {
+// Current Stock Report (alias for inventory report)
+router.get('/current-stock', [
+  verifyToken,
+  query('date').optional().isISO8601().withMessage('Date must be a valid date'),
+  query('category').optional().isMongoId().withMessage('Category must be a valid ID'),
+  query('lowStockThreshold').optional().isInt({ min: 0 }).withMessage('Low stock threshold must be a non-negative integer'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
+  // Redirect to inventory report
+  req.url = '/inventory' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '');
+  return router.handle(req, res);
+});
+
+// Monthly Sales Report (alias for daily sales with month range)
+router.get('/monthly-sales', [
+  verifyToken,
+  query('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
+  query('end_date').optional().isISO8601().withMessage('End date must be a valid date')
+], async (req, res) => {
+  // Redirect to daily sales report
+  req.url = '/daily-sales' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '');
+  return router.handle(req, res);
+});
+
+// Biller Performance Report
+router.get('/biller-performance', [
+  verifyToken,
+  query('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
+  query('end_date').optional().isISO8601().withMessage('End date must be a valid date')
+], async (req, res) => {
   try {
-    const { reportId } = req.params;
-    const { start_date, end_date, limit = 10 } = req.query;
-
-    // Helper to build date filter similar to /sales
-    const buildDateFilter = () => {
-      let dateFilter = '';
-      const params = [];
-      if (start_date && end_date) {
-        dateFilter = 'WHERE DATE(s.sale_date) BETWEEN ? AND ?';
-        params.push(start_date, end_date);
-      } else if (start_date) {
-        dateFilter = 'WHERE DATE(s.sale_date) >= ?';
-        params.push(start_date);
-      } else if (end_date) {
-        dateFilter = 'WHERE DATE(s.sale_date) <= ?';
-        params.push(end_date);
-      } else {
-        dateFilter = 'WHERE DATE(s.sale_date) = CURDATE()';
-      }
-      return { dateFilter, params };
-    };
-
-    switch (reportId) {
-      case 'daily-sales': {
-        // Build date filter using helper so it respects start_date/end_date or defaults to today
-        const { dateFilter, params } = buildDateFilter();
-
-        // Aggregate quantity per product (grouped by category)
-        const [rows] = await db.execute(
-          `SELECT 
-             c.name AS category,
-             p.name AS product,
-             COALESCE(p.unit_price, 0) AS unit_price,
-             SUM(si.quantity) AS quantity,
-             ROUND(SUM(si.quantity) * COALESCE(p.unit_price, 0), 2) AS total_amount
-           FROM sale_items si
-           JOIN sales s ON si.sale_id = s.id
-           JOIN products p ON si.product_id = p.id
-           LEFT JOIN categories c ON p.category_id = c.id
-           ${dateFilter}
-           GROUP BY c.id, p.id
-           ORDER BY c.name, p.name
-          `,
-          params
-        );
-
-        // Totals for the range
-        const [totalsRes] = await db.execute(
-          `SELECT 
-             COALESCE(SUM(si.quantity), 0) AS total_quantity,
-             ROUND(COALESCE(SUM(si.quantity * COALESCE(p.unit_price,0)), 0), 2) AS total_amount
-           FROM sale_items si
-           JOIN sales s ON si.sale_id = s.id
-           JOIN products p ON si.product_id = p.id
-           ${dateFilter}
-          `,
-          params
-        );
-
-        const totals = totalsRes[0] || { total_quantity: 0, total_amount: 0 };
-
-        return res.json({ message: 'Daily sales report (category-wise)', data: { range: { start_date: req.query.start_date, end_date: req.query.end_date }, rows, totals } });
-      }
-
-      case 'current-stock': {
-        const [products] = await db.execute(`
-          SELECT p.*, c.name as category_name,
-            CASE WHEN p.stock_quantity <= p.min_stock_level THEN 'Low Stock' WHEN p.stock_quantity = 0 THEN 'Out of Stock' ELSE 'In Stock' END as stock_status
-          FROM products p
-          LEFT JOIN categories c ON p.category_id = c.id
-          WHERE p.status = 'active'
-          ORDER BY p.stock_quantity ASC
-        `);
-
-        return res.json({ message: 'Current stock report', data: { products } });
-      }
-
-      case 'revenue-summary': {
-        const { dateFilter, params } = buildDateFilter();
-
-        const [revenue] = await db.execute(
-          `SELECT COALESCE(SUM(s.subtotal), 0) as gross_revenue, COALESCE(SUM(s.tax_amount), 0) as total_tax, COALESCE(SUM(s.discount_amount),0) as total_discount, COALESCE(SUM(s.total_amount),0) as net_revenue, COUNT(*) as total_transactions FROM sales s ${dateFilter}`,
-          params
-        );
-
-        const [dailyTrend] = await db.execute(`
-          SELECT DATE(s.sale_date) as date, COALESCE(SUM(s.total_amount),0) as daily_revenue, COUNT(*) as daily_transactions
-          FROM sales s
-          WHERE DATE(s.sale_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-          GROUP BY DATE(s.sale_date)
-          ORDER BY date ASC
-        `);
-
-        return res.json({ message: 'Revenue summary', data: { summary: revenue[0], dailyTrend } });
-      }
-
-      case 'top-products': {
-        const paramsArr = [];
-        let dateFilter = '';
-        if (start_date && end_date) {
-          dateFilter = 'WHERE DATE(s.sale_date) BETWEEN ? AND ?';
-          paramsArr.push(start_date, end_date);
-        } else {
-          dateFilter = 'WHERE DATE(s.sale_date) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
-        }
-        paramsArr.push(parseInt(limit));
-
-        const [topProducts] = await db.execute(`
-          SELECT p.id, p.name, p.brand, c.name as category_name, SUM(si.quantity) as total_quantity_sold, SUM(si.line_total) as total_revenue, COUNT(DISTINCT s.id) as times_sold, AVG(si.unit_price) as average_price
-          FROM sale_items si
-          LEFT JOIN products p ON si.product_id = p.id
-          LEFT JOIN categories c ON p.category_id = c.id
-          LEFT JOIN sales s ON si.sale_id = s.id
-          ${dateFilter}
-          GROUP BY p.id, p.name, p.brand, c.name
-          ORDER BY total_quantity_sold DESC
-          LIMIT ?
-        `, paramsArr);
-
-        return res.json({ message: 'Top products', data: { topProducts } });
-      }
-
-      default:
-        return res.status(404).json({ message: 'Report not found' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
     }
+
+    const { start_date, end_date } = req.query;
+    
+    // Determine date range (default to last 30 days)
+    let startDate, endDate;
+    if (start_date && end_date) {
+      startDate = new Date(start_date);
+      endDate = new Date(end_date);
+    } else {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+    }
+
+    // Aggregate sales data by biller
+    const billerPerformance = await Sale.aggregate([
+      {
+        $match: {
+          sale_date: {
+            $gte: startDate,
+            $lte: endDate
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$biller_id',
+          total_sales: { $sum: 1 },
+          total_amount: { $sum: '$total_amount' },
+          total_items_sold: { $sum: { $size: '$items' } }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'biller'
+        }
+      },
+      { $unwind: '$biller' },
+      {
+        $project: {
+          _id: 0,
+          biller_id: '$_id',
+          biller_name: '$biller.name',
+          total_sales: 1,
+          total_amount: 1,
+          total_items_sold: 1,
+          average_sale_amount: { $divide: ['$total_amount', '$total_sales'] }
+        }
+      },
+      { $sort: { total_amount: -1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        billerPerformance,
+        dateRange: { start_date, end_date },
+        summary: {
+          total_billers: billerPerformance.length,
+          total_sales: billerPerformance.reduce((sum, b) => sum + b.total_sales, 0),
+          total_amount: billerPerformance.reduce((sum, b) => sum + b.total_amount, 0)
+        }
+      }
+    });
+
   } catch (error) {
-    console.error('Report generic handler error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Biller performance report error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
 

@@ -61,8 +61,37 @@ const categories = [
   { id: 10, name: 'Mixers', description: 'Non-alcoholic mixers and sodas', status: 'active' }
 ];
 
-// In-memory sales history to track transactions
-let salesHistory = [];
+// In-memory sales history to track transactions (with initial mock data to restore the 11,800 total)
+let salesHistory = [
+  {
+    id: Date.now() - 86400000 - 100,
+    sale_date: new Date().toISOString(),
+    total_amount: 3700,
+    items: [
+      { product_id: 6, product_name: "Johnnie Walker Black Label (Imported)", quantity: 1, unit_price: 3500, subtotal: 3500 },
+      { product_id: 15, product_name: "White Mischief Vodka", quantity: 1, unit_price: 500, subtotal: 500 }
+    ]
+  },
+  {
+    id: Date.now() - 86400000 - 200,
+    sale_date: new Date().toISOString(),
+    total_amount: 4050,
+    items: [
+      { product_id: 1, product_name: "Royal Stag Reserve", quantity: 2, unit_price: 950, subtotal: 1900 },
+      { product_id: 13, product_name: "Smirnoff Red (Imported)", quantity: 1, unit_price: 1500, subtotal: 1500 },
+      { product_id: 17, product_name: "Old Monk Supreme", quantity: 1, unit_price: 850, subtotal: 850 }
+    ]
+  },
+  {
+    id: Date.now() - 86400000 - 300,
+    sale_date: new Date().toISOString(),
+    total_amount: 4050,
+    items: [
+      { product_id: 19, product_name: "McDowell's No.1 Celebration Rum", quantity: 1, unit_price: 900, subtotal: 900 },
+      { product_id: 10, product_name: "Magic Moments Vodka", quantity: 2, unit_price: 1600, subtotal: 3200 }
+    ]
+  }
+];
 
 // In-memory products data with various volumes
 const products = [

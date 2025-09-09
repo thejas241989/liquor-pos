@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const db = require('../config/database');
+const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -25,16 +25,14 @@ router.post('/login', [
     const { username, password } = req.body;
 
     // Get user from database
-    const [users] = await db.execute(
-      'SELECT * FROM users WHERE (username = ? OR email = ?) AND status = ?',
-      [username, username, 'active']
-    );
+    const user = await User.findOne({ 
+      $or: [{ username }, { email: username }], 
+      status: 'active' 
+    });
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
-    const user = users[0];
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
@@ -45,7 +43,7 @@ router.post('/login', [
     // Generate JWT token
     const token = jwt.sign(
       { 
-        userId: user.id, 
+        userId: user._id, 
         username: user.username, 
         role: user.role 
       },
@@ -54,12 +52,20 @@ router.post('/login', [
     );
 
     // Return user data without password
-    const { password: _, ...userWithoutPassword } = user;
+    const userResponse = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    };
 
     res.json({
       message: 'Login successful',
       token,
-      user: userWithoutPassword
+      user: userResponse
     });
 
   } catch (error) {
@@ -71,27 +77,25 @@ router.post('/login', [
 // Get current user profile
 router.get('/profile', verifyToken, async (req, res) => {
   try {
-    const [users] = await db.execute(
-      'SELECT id, username, email, role, status, created_at FROM users WHERE id = ?',
-      [req.user.id]
-    );
+    const user = await User.findById(req.user.userId)
+      .select('-password');
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(users[0]);
+    res.json(user);
   } catch (error) {
     console.error('Profile error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Change password
+// Change password endpoint
 router.put('/change-password', [
   verifyToken,
   body('currentPassword').notEmpty().withMessage('Current password is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -105,17 +109,14 @@ router.put('/change-password', [
     const { currentPassword, newPassword } = req.body;
 
     // Get current user with password
-    const [users] = await db.execute(
-      'SELECT password FROM users WHERE id = ?',
-      [req.user.id]
-    );
+    const user = await User.findById(req.user.id).select('+password');
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, users[0].password);
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
     if (!isValidPassword) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
@@ -124,10 +125,8 @@ router.put('/change-password', [
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update password
-    await db.execute(
-      'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [hashedPassword, req.user.id]
-    );
+    user.password = hashedPassword;
+    await user.save();
 
     res.json({ message: 'Password changed successfully' });
 

@@ -40,9 +40,9 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - **Password Security**: Strong password requirements and validation
 
 ### 💾 Database Infrastructure
-- **MySQL Integration**: Production-ready MySQL database
-- **Comprehensive Schema**: 10 tables for complete system functionality
-- **Data Integrity**: Foreign key constraints and data validation
+- **MongoDB Integration**: Production-ready MongoDB database
+- **Comprehensive Schema**: Complete document models for system functionality
+- **Data Integrity**: Schema validation and data consistency
 - **Backup Ready**: Structured data for easy backup and recovery
 
 ## 🛠 Technical Architecture
@@ -56,7 +56,7 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 
 ### Backend Stack
 - **Node.js** with Express.js framework
-- **MySQL Database** with comprehensive schema
+- **MongoDB Database** with comprehensive schemas
 - **JWT Authentication** for secure user sessions
 - **CORS** enabled for cross-origin requests
 - **RESTful API** design with consistent response formatting
@@ -67,7 +67,7 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 
 ### Prerequisites
 - **Node.js** (v16 or higher)
-- **MySQL** (v8.0 or higher)
+- **MongoDB** (v6.0 or higher)
 - **npm or yarn** package manager
 - Modern web browser
 
@@ -86,14 +86,13 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 
 3. **Set up the database**
    ```bash
-   # Install MySQL if not already installed
-   brew install mysql  # On macOS
+   # Install MongoDB if not already installed
+   brew install mongodb-community  # On macOS
    
-   # Start MySQL service
-   brew services start mysql
+   # Start MongoDB service
+   brew services start mongodb-community
    
-   # Create database and import schema
-   mysql -u root -p < database_schema.sql
+   # MongoDB will automatically create the database when first used
    ```
 
 4. **Configure environment**
@@ -171,7 +170,7 @@ A comprehensive Point of Sale (POS) system built with React, TypeScript, and Nod
 - 🎨 Modern UI with responsive design and visual feedback
 - 📤 CSV export functionality for user data
 - 🔐 Enhanced password validation with strength indicators
-- 💾 Production MySQL database integration
+- 💾 Production MongoDB database integration
 - 🔔 Toast notification system for better UX
 - 📱 Mobile-responsive design improvements
 

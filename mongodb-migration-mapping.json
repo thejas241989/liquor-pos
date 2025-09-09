@@ -1,0 +1,43 @@
+{
+  "categories": {
+    "1": "68be73ddfde99e43918e65bd",
+    "2": "68be73ddfde99e43918e65bf",
+    "3": "68be73ddfde99e43918e65c1",
+    "4": "68be73ddfde99e43918e65c3",
+    "5": "68be73ddfde99e43918e65c5",
+    "6": "68be73ddfde99e43918e65c7",
+    "7": "68be73ddfde99e43918e65c9",
+    "8": "68be73ddfde99e43918e65cb",
+    "9": "68be73ddfde99e43918e65cd",
+    "10": "68be73ddfde99e43918e65cf",
+    "11": "68be73ddfde99e43918e65d1",
+    "12": "68be73ddfde99e43918e65d3",
+    "13": "68be73ddfde99e43918e65d5",
+    "14": "68be73ddfde99e43918e65d7",
+    "15": "68be73ddfde99e43918e65d9",
+    "16": "68be73ddfde99e43918e65db"
+  },
+  "users": {
+    "1": "68be73ddfde99e43918e65e5",
+    "2": "68be73ddfde99e43918e65e7",
+    "3": "68be73ddfde99e43918e65e9",
+    "5": "68be73ddfde99e43918e65eb"
+  },
+  "products": {
+    "1": "68be73ddfde99e43918e65ed",
+    "2": "68be73ddfde99e43918e65ef",
+    "3": "68be73ddfde99e43918e65f1",
+    "4": "68be73ddfde99e43918e65f3",
+    "5": "68be73ddfde99e43918e65f5",
+    "6": "68be73ddfde99e43918e65f7"
+  },
+  "sales": {
+    "1": "68be73ddfde99e43918e65f9",
+    "2": "68be73ddfde99e43918e65fd",
+    "3": "68be73ddfde99e43918e6601",
+    "4": "68be73ddfde99e43918e6605",
+    "5": "68be73ddfde99e43918e6609",
+    "6": "68be73ddfde99e43918e660d",
+    "7": "68be73ddfde99e43918e6611"
+  }
+}

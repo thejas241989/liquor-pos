@@ -9,18 +9,37 @@ import {
   TrendingUp,
   ShoppingCart,
   Clock,
-  UserCheck
+  UserCheck,
+  RefreshCw
 } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { useDashboardData } from '../../hooks/useDashboard';
 
 const ManagerDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { stats, loading, error, refetch } = useDashboardData();
+
+  // Debug logging
+  console.log('🔍 Manager Dashboard - Stats:', stats);
+  console.log('🔍 Manager Dashboard - Loading:', loading);
+  console.log('🔍 Manager Dashboard - Error:', error);
 
   const getHeaderActions = () => (
     <>
-      <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+      <button 
+        onClick={refetch}
+        disabled={loading}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+      >
+        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        Refresh
+      </button>
+      <button 
+        onClick={() => navigate('/reports')}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
         <FileText className="w-4 h-4" />
         Reports
       </button>
@@ -42,13 +61,49 @@ const ManagerDashboard: React.FC = () => {
 
       <AdminNavigation currentPage="dashboard" />
 
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-red-800">{error}</p>
+            </div>
+            <button 
+              onClick={refetch}
+              className="flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Info */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <h4 className="font-semibold text-yellow-800 mb-2">🔍 Debug Info</h4>
+        <div className="text-sm text-yellow-700">
+          <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
+          <p><strong>Error:</strong> {error || 'None'}</p>
+          <p><strong>Stats:</strong> {JSON.stringify(stats)}</p>
+          <p><strong>API URL:</strong> http://localhost:5002/api</p>
+        </div>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Today's Sales</p>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(0)}</p>
+              <p className="text-sm font-medium text-gray-600">Total Inventory Value</p>
+              <p className="text-2xl font-bold text-green-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-20 h-8 block"></span>
+                ) : (
+                  formatCurrency(stats.totalInventoryValue)
+                )}
+              </p>
             </div>
             <DollarSign className="w-8 h-8 text-green-600" />
           </div>
@@ -57,10 +112,16 @@ const ManagerDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending Indents</p>
-              <p className="text-2xl font-bold text-orange-600">0</p>
+              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-12 h-8 block"></span>
+                ) : (
+                  stats.totalProducts
+                )}
+              </p>
             </div>
-            <Clock className="w-8 h-8 text-orange-600" />
+            <Package className="w-8 h-8 text-blue-600" />
           </div>
         </div>
         
@@ -68,7 +129,13 @@ const ManagerDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Low Stock Alerts</p>
-              <p className="text-2xl font-bold text-red-600">0</p>
+              <p className="text-2xl font-bold text-red-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-8 h-8 block"></span>
+                ) : (
+                  stats.lowStockItems
+                )}
+              </p>
             </div>
             <AlertTriangle className="w-8 h-8 text-red-600" />
           </div>
@@ -77,10 +144,16 @@ const ManagerDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Active Staff</p>
-              <p className="text-2xl font-bold text-blue-600">0</p>
+              <p className="text-sm font-medium text-gray-600">Categories</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-8 h-8 block"></span>
+                ) : (
+                  stats.totalCategories
+                )}
+              </p>
             </div>
-            <Users className="w-8 h-8 text-blue-600" />
+            <Users className="w-8 h-8 text-purple-600" />
           </div>
         </div>
       </div>

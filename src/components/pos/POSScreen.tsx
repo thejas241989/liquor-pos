@@ -14,6 +14,7 @@ interface Product {
   stock_quantity: number;
   barcode: string;
   volume: string;
+  brand?: string;
   alcohol_content?: number;
 }
 
@@ -40,23 +41,103 @@ const POSScreen: React.FC = () => {
 
   const TAX_RATE = 0.1; // 10% tax
 
-  const filterProducts = useCallback(() => {
-    let filtered = products;
+  const filterProducts = useCallback(async () => {
+    console.log('Filtering products with search term:', searchTerm, 'category:', selectedCategory);
     
-    if (searchTerm) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.barcode.includes(searchTerm)
-      );
+    if (!searchTerm && !selectedCategory) {
+      // If no search term or category, show all products
+      console.log('No search criteria, showing all products:', products.length);
+      setFilteredProducts(products);
+      return;
     }
-    
-    if (selectedCategory) {
-      filtered = filtered.filter(product =>
-        product.category === selectedCategory || product.category_name === selectedCategory
-      );
+
+    try {
+      // Use backend search when there's a search term or category
+      const token = localStorage.getItem('token');
+      let searchUrl = 'http://localhost:5002/api/products/test?limit=100';
+      
+      if (searchTerm) {
+        searchUrl += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+      
+      console.log('Making API search request to:', searchUrl);
+      
+      const response = await fetch(searchUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        let searchResults = data.data || [];
+        console.log('Backend search results:', searchResults.length, 'products');
+        
+        // Map products to correct structure
+        searchResults = searchResults.map((product: any) => ({
+          ...product,
+          id: String(product._id || product.id),
+          category: product.category_name || product.category || 'Unknown',
+          stock: product.stock_quantity || product.stock || 0,
+          stock_quantity: product.stock_quantity || product.stock || 0,
+          barcode: product.barcode || ''
+        }));
+
+        // Apply category filter locally if needed
+        if (selectedCategory) {
+          const beforeFilter = searchResults.length;
+          searchResults = searchResults.filter((product: any) =>
+            product.category === selectedCategory || product.category_name === selectedCategory
+          );
+          console.log('Category filter applied:', beforeFilter, '->', searchResults.length);
+        }
+
+        console.log('Final filtered results:', searchResults.length, 'products');
+        setFilteredProducts(searchResults);
+      } else {
+        console.log('Backend search failed, falling back to local filtering');
+        // Fallback to local filtering if backend search fails
+        let filtered = products;
+        
+        if (searchTerm) {
+          filtered = filtered.filter(product =>
+            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (product.barcode && product.barcode.includes(searchTerm)) ||
+            ((product as any).brand && (product as any).brand.toLowerCase().includes(searchTerm.toLowerCase()))
+          );
+        }
+        
+        if (selectedCategory) {
+          filtered = filtered.filter(product =>
+            product.category === selectedCategory || product.category_name === selectedCategory
+          );
+        }
+        
+        console.log('Local filter results:', filtered.length, 'products');
+        setFilteredProducts(filtered);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      // Fallback to local filtering
+      let filtered = products;
+      
+      if (searchTerm) {
+        filtered = filtered.filter(product =>
+          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (product.barcode && product.barcode.includes(searchTerm)) ||
+          ((product as any).brand && (product as any).brand.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+      }
+      
+      if (selectedCategory) {
+        filtered = filtered.filter(product =>
+          product.category === selectedCategory || product.category_name === selectedCategory
+        );
+      }
+      
+      console.log('Fallback filter results:', filtered.length, 'products');
+      setFilteredProducts(filtered);
     }
-    
-    setFilteredProducts(filtered);
   }, [products, searchTerm, selectedCategory]);
 
   useEffect(() => {
@@ -64,7 +145,12 @@ const POSScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    filterProducts();
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      filterProducts();
+    }, 300); // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timeoutId);
   }, [filterProducts]);
 
   const fetchData = async () => {
@@ -73,7 +159,102 @@ const POSScreen: React.FC = () => {
       
       // Try to fetch from test server first
       try {
-        const productsResponse = await fetch('http://localhost:5001/api/products', {
+        const productsResponse = await fetch('http://localhost:5002/api/products/test', {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (productsResponse.ok) {
+          const productsData = await productsResponse.json();
+          console.log('Products response from test endpoint:', productsData);
+          
+          // Handle test server response format
+          let productsList = [];
+          if (productsData.data && Array.isArray(productsData.data)) {
+            productsList = productsData.data;
+          } else if (Array.isArray(productsData)) {
+            productsList = productsData;
+          }
+          
+          console.log('Raw products list:', productsList);
+          
+          // Map products to correct structure
+          const mappedProducts = productsList.map((product: any) => ({
+            ...product,
+            id: String(product._id || product.id), // Use _id if available, fallback to id
+            category: product.category_name || product.category || 'Unknown',
+            stock: product.stock_quantity || product.stock || 0,
+            stock_quantity: product.stock_quantity || product.stock || 0,
+            barcode: product.barcode || '' // Ensure barcode is always a string
+          }));
+          
+          console.log('Mapped products:', mappedProducts);
+          console.log('Sample product:', mappedProducts[0]);
+          
+          // Fetch categories from test endpoint or authenticated endpoint
+          try {
+            let categoriesResponse = await fetch('http://localhost:5002/api/categories/test', {
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            // If the test endpoint fails, try with authentication
+            if (!categoriesResponse.ok) {
+              categoriesResponse = await fetch('http://localhost:5002/api/categories', {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+            }
+
+            let categoriesList = [];
+            if (categoriesResponse.ok) {
+              const categoriesData = await categoriesResponse.json();
+              console.log('Categories response:', categoriesData);
+              
+              if (categoriesData.data && Array.isArray(categoriesData.data)) {
+                // Map MongoDB categories to the correct structure
+                categoriesList = categoriesData.data.map((cat: any) => ({
+                  id: String(cat._id || cat.id),
+                  name: cat.name,
+                  description: cat.description || ''
+                }));
+              } else if (Array.isArray(categoriesData)) {
+                categoriesList = categoriesData.map((cat: any) => ({
+                  id: String(cat._id || cat.id),
+                  name: cat.name,
+                  description: cat.description || ''
+                }));
+              }
+            }
+            
+            setCategories(categoriesList);
+            console.log('Categories loaded:', categoriesList.length);
+          } catch (categoryError) {
+            console.warn('Failed to fetch categories:', categoryError);
+            // Extract unique categories from products as fallback
+            const uniqueCategories = Array.from(new Set(mappedProducts.map((p: any) => p.category)))
+              .filter(Boolean)
+              .map((name, index) => ({ id: String(index + 1), name: String(name), description: '' }));
+            setCategories(uniqueCategories);
+            console.log('Using categories from products:', uniqueCategories);
+          }
+          
+          setProducts(mappedProducts);
+          setFilteredProducts(mappedProducts);
+          setLoading(false);
+          return;
+        }
+      } catch (testError) {
+        console.warn('Test endpoint not available, trying authenticated endpoint:', testError);
+      }
+      
+      // Try authenticated endpoint with token
+      try {
+        const productsResponse = await fetch('http://localhost:5002/api/products', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -95,17 +276,19 @@ const POSScreen: React.FC = () => {
           // Map products to correct structure
           const mappedProducts = productsList.map((product: any) => ({
             ...product,
-            id: String(product.id), // Ensure ID is string
+            id: String(product._id || product.id), // Use _id if available, fallback to id
             category: product.category_name || product.category || 'Unknown',
             stock: product.stock_quantity || product.stock || 0,
-            stock_quantity: product.stock_quantity || product.stock || 0
+            stock_quantity: product.stock_quantity || product.stock || 0,
+            barcode: product.barcode || '' // Ensure barcode is always a string
           }));
           
           console.log('Mapped products:', mappedProducts);
+          console.log('Sample product:', mappedProducts[0]);
           
           // Fetch categories
           try {
-            const categoriesResponse = await fetch('http://localhost:5001/api/categories', {
+            const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -145,7 +328,7 @@ const POSScreen: React.FC = () => {
       let totalPages = 1;
       
       do {
-        const productsResponse = await fetch(`http://localhost:5001/api/products?page=${currentPage}&limit=100`, {
+        const productsResponse = await fetch(`http://localhost:5002/api/products?page=${currentPage}&limit=100`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -163,7 +346,7 @@ const POSScreen: React.FC = () => {
       } while (currentPage <= totalPages);
       
       // Fetch categories
-      const categoriesResponse = await fetch('http://localhost:5001/api/categories', {
+      const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -176,9 +359,10 @@ const POSScreen: React.FC = () => {
         // Map products to correct structure
         const productsList = allProducts.map((product: any) => ({
           ...product,
-          id: String(product.id), // Ensure ID is string
+          id: String(product._id || product.id), // Use _id if available, fallback to id
           category: product.category_name || product.category,
-          stock: product.stock_quantity || product.stock || 0
+          stock: product.stock_quantity || product.stock || 0,
+          barcode: product.barcode || '' // Ensure barcode is always a string
         }));
         
         // Handle categories
@@ -198,31 +382,43 @@ const POSScreen: React.FC = () => {
   };
 
   const addToCart = (product: Product) => {
-    if (product.stock <= 0) {
+    console.log('Adding product to cart:', product);
+    console.log('Current cart:', cart);
+    
+    const availableStock = product.stock_quantity || product.stock || 0;
+    console.log('Available stock:', availableStock);
+    
+    if (availableStock <= 0) {
+      console.log('Product out of stock, showing alert');
       alert('Product is out of stock!');
       return;
     }
 
     const existingItem = cart.find(item => item.product.id === product.id);
+    console.log('Existing item in cart:', existingItem);
     
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        alert(`Cannot add more. Only ${product.stock} items available.`);
+      if (existingItem.quantity >= availableStock) {
+        console.log('Cannot add more, showing alert');
+        alert(`Cannot add more. Only ${availableStock} items available.`);
         return;
       }
       
+      console.log('Updating existing item quantity');
       setCart(cart.map(item =>
         item.product.id === product.id
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * product.price }
           : item
       ));
     } else {
+      console.log('Adding new item to cart');
       setCart([...cart, { 
         product, 
         quantity: 1, 
         subtotal: product.price 
       }]);
     }
+    console.log('Cart update completed');
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -232,8 +428,10 @@ const POSScreen: React.FC = () => {
     }
 
     const product = products.find(p => p.id === productId);
-    if (product && quantity > product.stock) {
-      alert(`Cannot add more. Only ${product.stock} items available.`);
+    const availableStock = product ? (product.stock_quantity || product.stock || 0) : 0;
+    
+    if (product && quantity > availableStock) {
+      alert(`Cannot add more. Only ${availableStock} items available.`);
       return;
     }
 
@@ -273,12 +471,12 @@ const POSScreen: React.FC = () => {
     try {
       // Build items payload (use product id and quantity)
       const itemsPayload = cart.map(item => ({ 
-        id: parseInt(item.product.id), // Convert to number for test server
+        id: item.product.id, // Keep as string for MongoDB ObjectId compatibility
         quantity: item.quantity 
       }));
 
       // Try test server format first
-      const response = await fetch('http://localhost:5001/api/sales', {
+      const response = await fetch('http://localhost:5002/api/sales', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -299,7 +497,11 @@ const POSScreen: React.FC = () => {
           const updatedProducts = products.map(p => {
             const sold = soldItems.find((s: any) => String(s.id) === String(p.id));
             if (sold) {
-              return { ...p, stock: Math.max(0, p.stock - sold.quantity) };
+              return { 
+                ...p, 
+                stock: Math.max(0, (p.stock || 0) - sold.quantity),
+                stock_quantity: Math.max(0, (p.stock_quantity || 0) - sold.quantity)
+              };
             }
             return p;
           });
@@ -307,6 +509,7 @@ const POSScreen: React.FC = () => {
         }
 
         // Dispatch event with summary and sold items so dashboards can update
+        console.log('📡 Dispatching inventory update event with:', { summary, soldItems });
         window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
           detail: { summary, soldItems } 
         }));
@@ -331,7 +534,11 @@ const POSScreen: React.FC = () => {
         const updatedProducts = products.map(p => {
           const sold = soldItems.find((s: any) => String(s.id) === String(p.id));
           if (sold) {
-            return { ...p, stock: Math.max(0, p.stock - sold.quantity) };
+            return { 
+              ...p, 
+              stock: Math.max(0, (p.stock || 0) - sold.quantity),
+              stock_quantity: Math.max(0, (p.stock_quantity || 0) - sold.quantity)
+            };
           }
           return p;
         });
@@ -339,6 +546,7 @@ const POSScreen: React.FC = () => {
       }
 
       // Dispatch event with summary and sold items so dashboards can update
+      console.log('📡 Dispatching inventory update event with:', { summary, soldItems });
       window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
         detail: { summary, soldItems } 
       }));
@@ -433,7 +641,10 @@ const POSScreen: React.FC = () => {
                     type="text"
                     placeholder="Search products by name, barcode, or brand..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      console.log('Search term changed:', e.target.value);
+                      setSearchTerm(e.target.value);
+                    }}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -486,11 +697,11 @@ const POSScreen: React.FC = () => {
                     <div className="text-sm text-gray-600 mb-1">{product.volume} • {product.category}</div>
                     <div className="flex justify-between items-center">
                       <span className="text-lg font-bold text-green-600">{formatCurrency(product.price)}</span>
-                      <span className={`text-sm ${product.stock < 10 ? 'text-red-500' : 'text-gray-500'}`}>
-                        Stock: {product.stock}
+                      <span className={`text-sm ${(product.stock_quantity || product.stock || 0) < 10 ? 'text-red-500' : 'text-gray-500'}`}>
+                        Stock: {product.stock_quantity || product.stock || 0}
                       </span>
                     </div>
-                    {product.stock <= 0 && (
+                    {(product.stock_quantity || product.stock || 0) <= 0 && (
                       <div className="text-red-500 text-sm font-medium mt-1">Out of Stock</div>
                     )}
                   </div>

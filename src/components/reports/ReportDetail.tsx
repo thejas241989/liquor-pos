@@ -4,6 +4,10 @@ import PageHeader from '../common/PageHeader';
 import { apiService } from '../../services/api';
 import DailySalesReport from './DailySalesReport';
 import TopProductsReport from './TopProductsReport';
+import InventoryReport from './InventoryReport';
+import DayWiseSalesReport from './DayWiseSalesReport';
+import StockReconciliationReport from './StockReconciliationReport';
+import BillerPerformanceReport from './BillerPerformanceReport';
 
 const ReportDetail: React.FC = () => {
   const { reportId } = useParams<{ reportId: string }>();
@@ -80,14 +84,19 @@ const ReportDetail: React.FC = () => {
           <div>
             {reportId === 'daily-sales' && <DailySalesReport data={data} />}
             {reportId === 'top-products' && <TopProductsReport data={data} />}
-            {reportId === 'current-stock' && (
-              <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
-            )}
-            {reportId === 'revenue-summary' && (
-              <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
-            )}
-            {!['daily-sales','current-stock','revenue-summary','top-products'].includes(reportId || '') && (
-              <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
+            {reportId === 'inventory' && <InventoryReport data={data} />}
+            {reportId === 'day-wise-sales' && <DayWiseSalesReport data={data} />}
+            {reportId === 'stock-reconciliation' && <StockReconciliationReport data={data} />}
+            {reportId === 'current-stock' && <InventoryReport data={data} />}
+            {reportId === 'biller-performance' && <BillerPerformanceReport data={data} />}
+            {reportId === 'monthly-sales' && <DailySalesReport data={data} />}
+            {!['daily-sales','inventory','day-wise-sales','stock-reconciliation','current-stock','top-products','biller-performance','monthly-sales'].includes(reportId || '') && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Raw Data</h3>
+                <pre className="text-sm whitespace-pre-wrap text-gray-700 bg-white p-4 rounded border overflow-auto max-h-96">
+                  {JSON.stringify(data, null, 2)}
+                </pre>
+              </div>
             )}
           </div>
         )}

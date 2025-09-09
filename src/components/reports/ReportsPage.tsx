@@ -111,21 +111,21 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Inventory Reports</h3>
           </div>
           <div className="space-y-3">
+            <button onClick={() => navigate('/reports/inventory')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <div className="font-medium text-gray-900">Inventory Report</div>
+              <div className="text-sm text-gray-600">Complete stock levels with values</div>
+            </button>
+            <button onClick={() => navigate('/reports/day-wise-sales')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <div className="font-medium text-gray-900">Day-Wise Sales Report</div>
+              <div className="text-sm text-gray-600">Daily stock movements and sales</div>
+            </button>
+            <button onClick={() => navigate('/reports/stock-reconciliation')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <div className="font-medium text-gray-900">Stock Reconciliation</div>
+              <div className="text-sm text-gray-600">Physical vs system stock variances</div>
+            </button>
             <button onClick={() => navigate('/reports/current-stock')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Current Stock Levels</div>
               <div className="text-sm text-gray-600">Real-time inventory status</div>
-            </button>
-            <button onClick={() => navigate('/reports/low-stock')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-              <div className="font-medium text-gray-900">Low Stock Alert</div>
-              <div className="text-sm text-gray-600">Items requiring restock</div>
-            </button>
-            <button onClick={() => navigate('/reports/stock-movement')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-              <div className="font-medium text-gray-900">Stock Movement</div>
-              <div className="text-sm text-gray-600">Inventory flow analysis</div>
-            </button>
-            <button onClick={() => navigate('/reports/reconciliation')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-              <div className="font-medium text-gray-900">Reconciliation Report</div>
-              <div className="text-sm text-gray-600">Inventory reconciliation</div>
             </button>
           </div>
         </div>

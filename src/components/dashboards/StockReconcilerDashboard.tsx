@@ -8,23 +8,47 @@ import {
   Search, 
   FileText,
   Package,
-  BarChart3
+  BarChart3,
+  RefreshCw,
+  DollarSign
 } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
+import { useInventorySummary } from '../../hooks/useDashboard';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 const StockReconcilerDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { summary, loading, error, refetch } = useInventorySummary();
+
+  // Debug logging
+  console.log('🔍 Stock Reconciler Dashboard - Summary:', summary);
+  console.log('🔍 Stock Reconciler Dashboard - Loading:', loading);
+  console.log('🔍 Stock Reconciler Dashboard - Error:', error);
 
   const getHeaderActions = () => (
     <>
-      <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+      <button 
+        onClick={refetch}
+        disabled={loading}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+      >
+        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        Refresh
+      </button>
+      <button 
+        onClick={() => navigate('/reports')}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
         <FileText className="w-4 h-4" />
         Reports
       </button>
-      <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+      <button 
+        onClick={() => navigate('/inventory')}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
         <ClipboardCheck className="w-4 h-4" />
-        New Reconciliation
+        Start Reconciliation
       </button>
     </>
   );
@@ -40,14 +64,56 @@ const StockReconcilerDashboard: React.FC = () => {
 
       <AdminNavigation currentPage="dashboard" />
 
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-red-800">{error}</p>
+            </div>
+            <button 
+              onClick={refetch}
+              className="flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending Reconciliations</p>
-              <p className="text-2xl font-bold text-orange-600">0</p>
-              <p className="text-xs text-gray-500">Items to reconcile</p>
+              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-12 h-8 block"></span>
+                ) : (
+                  summary?.total_products || 0
+                )}
+              </p>
+              <p className="text-xs text-gray-500">Items to track</p>
+            </div>
+            <Package className="w-8 h-8 text-blue-600" />
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Low Stock Items</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-8 h-8 block"></span>
+                ) : (
+                  summary?.low_stock_items || 0
+                )}
+              </p>
+              <p className="text-xs text-gray-500">Need attention</p>
             </div>
             <Clock className="w-8 h-8 text-orange-600" />
           </div>
@@ -56,22 +122,34 @@ const StockReconcilerDashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Completed Today</p>
-              <p className="text-2xl font-bold text-green-600">0</p>
-              <p className="text-xs text-gray-500">Reconciliations done</p>
+              <p className="text-sm font-medium text-gray-600">Out of Stock</p>
+              <p className="text-2xl font-bold text-red-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-8 h-8 block"></span>
+                ) : (
+                  summary?.out_of_stock_items || 0
+                )}
+              </p>
+              <p className="text-xs text-gray-500">Critical items</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <AlertTriangle className="w-8 h-8 text-red-600" />
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Discrepancies Found</p>
-              <p className="text-2xl font-bold text-red-600">0</p>
-              <p className="text-xs text-gray-500">Items with variance</p>
+              <p className="text-sm font-medium text-gray-600">Inventory Value</p>
+              <p className="text-2xl font-bold text-green-600">
+                {loading ? (
+                  <span className="animate-pulse bg-gray-200 rounded w-20 h-8 block"></span>
+                ) : (
+                  formatCurrency(summary?.total_inventory_value || 0)
+                )}
+              </p>
+              <p className="text-xs text-gray-500">Total stock worth</p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-red-600" />
+            <DollarSign className="w-8 h-8 text-green-600" />
           </div>
         </div>
       </div>

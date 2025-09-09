@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db = require('../config/database');
+const User = require('../models/User');
 
 // Middleware to verify JWT token
 const verifyToken = async (req, res, next) => {
@@ -13,16 +13,15 @@ const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
     
     // Get user from database to ensure user still exists and is active
-    const [users] = await db.execute(
-      'SELECT id, username, email, role, status FROM users WHERE id = ? AND status = ?',
-      [decoded.userId, 'active']
-    );
+    const user = await User.findById(decoded.userId)
+      .select('-password')
+      .where('status').equals('active');
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(401).json({ message: 'Invalid token. User not found or inactive.' });
     }
 
-    req.user = users[0];
+    req.user = user;
     next();
   } catch (error) {
     res.status(401).json({ message: 'Invalid token.' });

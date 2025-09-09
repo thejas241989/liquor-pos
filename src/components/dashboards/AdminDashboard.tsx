@@ -17,6 +17,17 @@ const AdminDashboard: React.FC = () => {
 
   const getHeaderActions = () => {
     switch (activeSection) {
+      case 'dashboard':
+        return (
+          <button
+            onClick={refetch}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            <BarChart3 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Data
+          </button>
+        );
       case 'pos':
         return (
           <button
@@ -76,13 +87,44 @@ const AdminDashboard: React.FC = () => {
 
       {activeSection === 'dashboard' && (
         <>
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <h3 className="text-red-800 font-medium">Error Loading Dashboard Data</h3>
+              </div>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+              <button
+                onClick={refetch}
+                className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Stats Section */}
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">System Overview</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">System Overview</h3>
+              {loading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  Loading...
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex flex-col">
-                  <div className="text-2xl font-bold text-green-600">{formatCurrency(costValue)}</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {loading ? (
+                      <div className="animate-pulse bg-gray-200 rounded w-20 h-8"></div>
+                    ) : (
+                      formatCurrency(costValue)
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">Cost Value</span>
                     <span title="Cost value = sum of (product cost × current stock). Represents inventory carrying value." className="inline-block">
@@ -90,7 +132,7 @@ const AdminDashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-sm text-gray-500 mt-1 flex items-center">
-                    <span>Retail: {formatCurrency(retailValue)}</span>
+                    <span>Retail: {loading ? '...' : formatCurrency(retailValue)}</span>
                     <span title="Retail value = sum of (selling price × current stock). Useful for revenue estimation." className="inline-block ml-2">
                       <HelpCircle className="w-4 h-4 text-gray-400" />
                     </span>
@@ -99,15 +141,33 @@ const AdminDashboard: React.FC = () => {
                 <div className="text-sm text-green-600">Total Inventory Value</div>
               </div>
               <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{stats.totalProducts}</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {loading ? (
+                    <div className="animate-pulse bg-gray-200 rounded w-12 h-8"></div>
+                  ) : (
+                    stats.totalProducts
+                  )}
+                </div>
                 <div className="text-sm text-blue-600">Total Products</div>
               </div>
               <div className="bg-orange-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">{stats.lowStockItems}</div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {loading ? (
+                    <div className="animate-pulse bg-gray-200 rounded w-8 h-8"></div>
+                  ) : (
+                    stats.lowStockItems
+                  )}
+                </div>
                 <div className="text-sm text-orange-600">Low Stock Items</div>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">{stats.totalCategories}</div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {loading ? (
+                    <div className="animate-pulse bg-gray-200 rounded w-8 h-8"></div>
+                  ) : (
+                    stats.totalCategories
+                  )}
+                </div>
                 <div className="text-sm text-purple-600">Categories</div>
               </div>
             </div>

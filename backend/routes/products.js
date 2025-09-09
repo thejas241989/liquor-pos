@@ -1,16 +1,287 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const db = require('../config/database');
+const Product = require('../models/Product');
+const Category = require('../models/Category');
 const { verifyToken, requireManager, requireBiller } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all products with pagination and filtering
+// Test endpoint for POS without authentication (for development) - MUST BE FIRST
+router.get('/test', async (req, res) => {
+  try {
+    const { search, id } = req.query;
+    
+    // If ID is provided, return single product
+    if (id) {
+      const product = await Product.findById(id)
+        .populate('category_id', 'name')
+        .populate('subcategory_id', 'name');
+
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      const responseProduct = {
+        id: product._id.toString(),
+        _id: product._id,
+        name: product.name,
+        category: product.category_id?.name || 'Unknown',
+        category_name: product.category_id?.name || 'Unknown',
+        category_id: product.category_id?._id,
+        price: product.price || product.unit_price,
+        stock: product.stock_quantity,
+        stock_quantity: product.stock_quantity,
+        barcode: product.barcode || '',
+        volume: product.volume || '',
+        brand: product.brand || '',
+        alcohol_content: product.alcohol_percentage,
+        min_stock_level: product.min_stock_level,
+        tax_percentage: product.tax_percentage,
+        status: product.status
+      };
+
+      return res.json({ data: responseProduct });
+    }
+
+    // Otherwise return list of products
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    // Build filter for search
+    let filter = { status: 'active' };
+    
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { barcode: { $regex: search, $options: 'i' } },
+        { brand: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get products with category information
+    const products = await Product.find(filter)
+      .populate('category_id', 'name')
+      .populate('subcategory_id', 'name')
+      .skip(skip)
+      .limit(limit)
+      .sort({ name: 1 });
+
+    // Map products to include flat category name and proper ID
+    const mappedProducts = products.map(product => ({
+      id: product._id.toString(),
+      _id: product._id,
+      name: product.name,
+      category: product.category_id?.name || 'Unknown',
+      category_name: product.category_id?.name || 'Unknown',
+      category_id: product.category_id?._id,
+      price: product.price || product.unit_price,
+      stock: product.stock_quantity,
+      stock_quantity: product.stock_quantity,
+      barcode: product.barcode || '',
+      volume: product.volume || '',
+      brand: product.brand || '',
+      alcohol_content: product.alcohol_percentage,
+      min_stock_level: product.min_stock_level,
+      tax_percentage: product.tax_percentage,
+      status: product.status
+    }));
+
+    // Get total count for pagination
+    const total = await Product.countDocuments(filter);
+
+    res.json({
+      data: mappedProducts,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Test endpoint error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Test POST endpoint for creating products without authentication (for development)
+router.post('/test', async (req, res) => {
+  try {
+    const {
+      name, category_id, barcode, price, stock_quantity = 0, 
+      volume, brand, alcohol_percentage, description
+    } = req.body;
+
+    console.log('Received product data:', req.body);
+
+    // Validate required fields
+    if (!name || !category_id || !price) {
+      return res.status(400).json({ 
+        message: 'Name, category_id, and price are required' 
+      });
+    }
+
+    // Check if barcode already exists (if provided)
+    if (barcode) {
+      const existingProduct = await Product.findOne({ barcode });
+      if (existingProduct) {
+        return res.status(400).json({ 
+          message: 'Product with this barcode already exists' 
+        });
+      }
+    }
+
+    // Create new product
+    const newProduct = new Product({
+      name,
+      category_id,
+      barcode: barcode || undefined,
+      price: Number(price),
+      unit_price: Number(price), // Set unit_price same as price
+      stock_quantity: Number(stock_quantity) || 0,
+      min_stock_level: 10,
+      volume: volume || '',
+      brand: brand || '',
+      alcohol_percentage: alcohol_percentage ? Number(alcohol_percentage) : undefined,
+      description: description || '',
+      status: 'active'
+    });
+
+    const savedProduct = await newProduct.save();
+    
+    // Populate category for response
+    await savedProduct.populate('category_id', 'name');
+
+    const responseProduct = {
+      id: savedProduct._id.toString(),
+      _id: savedProduct._id,
+      name: savedProduct.name,
+      category: savedProduct.category_id?.name || 'Unknown',
+      category_name: savedProduct.category_id?.name || 'Unknown',
+      category_id: savedProduct.category_id?._id,
+      price: savedProduct.price,
+      stock: savedProduct.stock_quantity,
+      stock_quantity: savedProduct.stock_quantity,
+      barcode: savedProduct.barcode || '',
+      volume: savedProduct.volume || '',
+      brand: savedProduct.brand || '',
+      alcohol_content: savedProduct.alcohol_percentage,
+      min_stock_level: savedProduct.min_stock_level,
+      status: savedProduct.status
+    };
+
+    console.log('Product created successfully:', responseProduct);
+
+    res.status(201).json({
+      message: 'Product created successfully',
+      data: responseProduct
+    });
+  } catch (error) {
+    console.error('Test POST endpoint error:', error);
+    if (error.code === 11000) {
+      res.status(400).json({ message: 'Product with this barcode already exists' });
+    } else {
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+});
+
+// Test PUT endpoint for updating products without authentication (for development)
+router.put('/test', async (req, res) => {
+  try {
+    const {
+      id, name, category_id, barcode, price, stock_quantity, 
+      volume, brand, alcohol_percentage, description
+    } = req.body;
+
+    console.log('Received product update data:', req.body);
+
+    // Validate required fields
+    if (!id) {
+      return res.status(400).json({ 
+        message: 'Product ID is required for update' 
+      });
+    }
+
+    const updateFields = {};
+    
+    if (name) updateFields.name = name;
+    if (category_id) updateFields.category_id = category_id;
+    if (barcode !== undefined) updateFields.barcode = barcode || undefined;
+    if (price !== undefined) {
+      updateFields.price = Number(price);
+      updateFields.unit_price = Number(price);
+    }
+    if (stock_quantity !== undefined) updateFields.stock_quantity = Number(stock_quantity);
+    if (volume !== undefined) updateFields.volume = volume;
+    if (brand !== undefined) updateFields.brand = brand;
+    if (alcohol_percentage !== undefined) updateFields.alcohol_percentage = alcohol_percentage ? Number(alcohol_percentage) : undefined;
+    if (description !== undefined) updateFields.description = description;
+
+    // Check if barcode already exists for another product (if updating barcode)
+    if (updateFields.barcode) {
+      const existingProduct = await Product.findOne({ 
+        barcode: updateFields.barcode,
+        _id: { $ne: id }
+      });
+      if (existingProduct) {
+        return res.status(400).json({ 
+          message: 'Product with this barcode already exists' 
+        });
+      }
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      updateFields,
+      { new: true, runValidators: true }
+    ).populate('category_id', 'name');
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const responseProduct = {
+      id: updatedProduct._id.toString(),
+      _id: updatedProduct._id,
+      name: updatedProduct.name,
+      category: updatedProduct.category_id?.name || 'Unknown',
+      category_name: updatedProduct.category_id?.name || 'Unknown',
+      category_id: updatedProduct.category_id?._id,
+      price: updatedProduct.price,
+      stock: updatedProduct.stock_quantity,
+      stock_quantity: updatedProduct.stock_quantity,
+      barcode: updatedProduct.barcode || '',
+      volume: updatedProduct.volume || '',
+      brand: updatedProduct.brand || '',
+      alcohol_content: updatedProduct.alcohol_percentage,
+      min_stock_level: updatedProduct.min_stock_level,
+      status: updatedProduct.status
+    };
+
+    console.log('Product updated successfully:', responseProduct);
+
+    res.json({
+      message: 'Product updated successfully',
+      data: responseProduct
+    });
+  } catch (error) {
+    console.error('Test PUT endpoint error:', error);
+    if (error.code === 11000) {
+      res.status(400).json({ message: 'Product with this barcode already exists' });
+    } else {
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+});
+
+// Get all products with pagination and filtering (authenticated)
 router.get('/', [
   verifyToken,
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-  query('category').optional().isInt().withMessage('Category must be a valid ID'),
+  query('category_id').optional().isMongoId().withMessage('Category must be a valid MongoDB ID'),
   query('search').optional().trim()
 ], async (req, res) => {
   try {
@@ -24,71 +295,60 @@ router.get('/', [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
     const { category_id, search, status = 'active' } = req.query;
 
-    let whereClause = 'WHERE p.status = ?';
-    let queryParams = [status];
+    // Build filter
+    let filter = { status };
 
     if (category_id) {
-      whereClause += ' AND p.category_id = ?';
-      queryParams.push(parseInt(category_id));
+      filter.category_id = category_id;
     }
 
     if (search) {
-      whereClause += ' AND (p.name LIKE ? OR p.barcode LIKE ? OR p.brand LIKE ?)';
-      const searchTerm = `%${search}%`;
-      queryParams.push(searchTerm, searchTerm, searchTerm);
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { barcode: { $regex: search, $options: 'i' } },
+        { brand: { $regex: search, $options: 'i' } }
+      ];
     }
 
     // Get products with category information
-    const query = `
-      SELECT 
-        p.id,
-        p.name,
-        p.category_id,
-        p.barcode,
-        p.price,
-        p.unit_price,
-        p.cost_price,
-        p.stock_quantity,
-        p.min_stock_level,
-        p.tax_percentage,
-        p.brand,
-        p.volume,
-        p.alcohol_percentage,
-        p.description,
-        p.status,
-        p.created_at,
-        p.updated_at,
-        c.name as category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      ${whereClause}
-      ORDER BY p.name
-      LIMIT ? OFFSET ?
-    `;
+    const products = await Product.find(filter)
+      .populate('category_id', 'name')
+      .populate('subcategory_id', 'name')
+      .skip(skip)
+      .limit(limit)
+      .sort({ name: 1 });
 
-    queryParams.push(limit, offset);
-
-    console.log('Query:', query);
-    console.log('Params:', queryParams);
-
-    const [products] = await db.execute(query, queryParams);
+    // Map products to include flat category name and proper ID
+    const mappedProducts = products.map(product => ({
+      id: product._id.toString(),
+      _id: product._id,
+      name: product.name,
+      category: product.category_id?.name || 'Unknown',
+      category_name: product.category_id?.name || 'Unknown',
+      category_id: product.category_id?._id,
+      price: product.price || product.unit_price,
+      stock: product.stock_quantity,
+      stock_quantity: product.stock_quantity,
+      barcode: product.barcode || '',
+      volume: product.volume || '',
+      brand: product.brand || '',
+      alcohol_content: product.alcohol_percentage,
+      min_stock_level: product.min_stock_level,
+      tax_percentage: product.tax_percentage,
+      status: product.status,
+      created_at: product.created_at,
+      updated_at: product.updated_at
+    }));
 
     // Get total count for pagination
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM products p
-      ${whereClause}
-    `;
-    const countParams = queryParams.slice(0, -2); // Remove LIMIT and OFFSET
-    const [countResult] = await db.execute(countQuery, countParams);
-    const total = countResult[0].total;
+    const total = await Product.countDocuments(filter);
 
     res.json({
       message: 'Products retrieved successfully',
-      data: products,
+      data: mappedProducts,
       pagination: {
         current_page: page,
         total_pages: Math.ceil(total / limit),
@@ -99,7 +359,7 @@ router.get('/', [
 
   } catch (error) {
     console.error('Get products error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
 
@@ -108,22 +368,36 @@ router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [products] = await db.execute(`
-      SELECT 
-        p.*,
-        c.name as category_name,
-        sc.name as subcategory_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN categories sc ON p.subcategory_id = sc.id
-      WHERE p.id = ?
-    `, [id]);
+    const product = await Product.findById(id)
+      .populate('category_id', 'name')
+      .populate('subcategory_id', 'name');
 
-    if (products.length === 0) {
+    if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    res.json(products[0]);
+    const responseProduct = {
+      id: product._id.toString(),
+      _id: product._id,
+      name: product.name,
+      category: product.category_id?.name || 'Unknown',
+      category_name: product.category_id?.name || 'Unknown',
+      category_id: product.category_id?._id,
+      price: product.price || product.unit_price,
+      stock: product.stock_quantity,
+      stock_quantity: product.stock_quantity,
+      barcode: product.barcode || '',
+      volume: product.volume || '',
+      brand: product.brand || '',
+      alcohol_content: product.alcohol_percentage,
+      min_stock_level: product.min_stock_level,
+      tax_percentage: product.tax_percentage,
+      status: product.status,
+      created_at: product.created_at,
+      updated_at: product.updated_at
+    };
+
+    res.json(responseProduct);
 
   } catch (error) {
     console.error('Get product error:', error);
@@ -136,7 +410,7 @@ router.post('/', [
   verifyToken,
   requireManager,
   body('name').notEmpty().withMessage('Product name is required'),
-  body('category_id').isInt().withMessage('Valid category ID is required'),
+  body('category_id').isMongoId().withMessage('Valid category ID is required'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('cost_price').optional().isFloat({ min: 0 }).withMessage('Cost price must be a positive number'),
   body('stock_quantity').optional().isInt({ min: 0 }).withMessage('Stock quantity must be a non-negative integer'),
@@ -157,39 +431,72 @@ router.post('/', [
       brand, volume, alcohol_percentage, description
     } = req.body;
 
-    // Check if barcode already exists
+    console.log('Received authenticated product data:', req.body);
+
+    // Check if barcode already exists (if provided)
     if (barcode) {
-      const [existingProducts] = await db.execute(
-        'SELECT id FROM products WHERE barcode = ?',
-        [barcode]
-      );
-      if (existingProducts.length > 0) {
-        return res.status(400).json({ message: 'Product with this barcode already exists' });
+      const existingProduct = await Product.findOne({ barcode });
+      if (existingProduct) {
+        return res.status(400).json({ 
+          message: 'Product with this barcode already exists' 
+        });
       }
     }
 
-    const [result] = await db.execute(`
-      INSERT INTO products 
-      (name, category_id, subcategory_id, barcode, price, cost_price, stock_quantity, 
-       min_stock_level, tax_percentage, brand, volume, alcohol_percentage, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      name, category_id, subcategory_id, barcode, price, cost_price,
-      stock_quantity, min_stock_level, tax_percentage, brand, volume,
-      alcohol_percentage, description
-    ]);
+    // Create new product
+    const newProduct = new Product({
+      name,
+      category_id,
+      subcategory_id: subcategory_id || undefined,
+      barcode: barcode || undefined,
+      price: Number(price),
+      unit_price: Number(price), // Set unit_price same as price
+      cost_price: cost_price ? Number(cost_price) : undefined,
+      stock_quantity: Number(stock_quantity) || 0,
+      min_stock_level: Number(min_stock_level) || 10,
+      tax_percentage: Number(tax_percentage) || 0,
+      volume: volume || '',
+      brand: brand || '',
+      alcohol_percentage: alcohol_percentage ? Number(alcohol_percentage) : undefined,
+      description: description || '',
+      status: 'active'
+    });
+
+    const savedProduct = await newProduct.save();
+    
+    // Populate category for response
+    await savedProduct.populate('category_id', 'name');
+
+    const responseProduct = {
+      id: savedProduct._id.toString(),
+      _id: savedProduct._id,
+      name: savedProduct.name,
+      category: savedProduct.category_id?.name || 'Unknown',
+      category_name: savedProduct.category_id?.name || 'Unknown',
+      category_id: savedProduct.category_id?._id,
+      price: savedProduct.price,
+      stock: savedProduct.stock_quantity,
+      stock_quantity: savedProduct.stock_quantity,
+      barcode: savedProduct.barcode || '',
+      volume: savedProduct.volume || '',
+      brand: savedProduct.brand || '',
+      alcohol_content: savedProduct.alcohol_percentage,
+      min_stock_level: savedProduct.min_stock_level,
+      status: savedProduct.status
+    };
+
+    console.log('Authenticated product created successfully:', responseProduct);
 
     res.status(201).json({
       message: 'Product created successfully',
-      productId: result.insertId
+      data: responseProduct
     });
-
   } catch (error) {
     console.error('Create product error:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 11000) {
       res.status(400).json({ message: 'Product with this barcode already exists' });
     } else {
-      res.status(500).json({ message: 'Internal server error' });
+      res.status(500).json({ message: 'Internal server error', error: error.message });
     }
   }
 });
@@ -220,79 +527,96 @@ router.put('/:id', [
       'alcohol_percentage', 'description', 'status'
     ];
 
-    // Build update query dynamically
-    allowedFields.forEach(field => {
+    // Only include fields that are provided in the request
+    for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updateFields[field] = req.body[field];
+        // Also update unit_price when price is updated
+        if (field === 'price') {
+          updateFields.unit_price = req.body[field];
+        }
       }
-    });
-
-    if (Object.keys(updateFields).length === 0) {
-      return res.status(400).json({ message: 'No valid fields to update' });
     }
 
-    const setClause = Object.keys(updateFields).map(field => `${field} = ?`).join(', ');
-    const values = Object.values(updateFields);
-    values.push(id);
+    // Check if barcode already exists for another product (if updating barcode)
+    if (updateFields.barcode) {
+      const existingProduct = await Product.findOne({ 
+        barcode: updateFields.barcode,
+        _id: { $ne: id }
+      });
+      if (existingProduct) {
+        return res.status(400).json({ 
+          message: 'Product with this barcode already exists' 
+        });
+      }
+    }
 
-    const [result] = await db.execute(
-      `UPDATE products SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      values
-    );
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      updateFields,
+      { new: true, runValidators: true }
+    ).populate('category_id', 'name');
 
-    if (result.affectedRows === 0) {
+    if (!updatedProduct) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    res.json({ message: 'Product updated successfully' });
+    const responseProduct = {
+      id: updatedProduct._id.toString(),
+      _id: updatedProduct._id,
+      name: updatedProduct.name,
+      category: updatedProduct.category_id?.name || 'Unknown',
+      category_name: updatedProduct.category_id?.name || 'Unknown',
+      category_id: updatedProduct.category_id?._id,
+      price: updatedProduct.price,
+      stock: updatedProduct.stock_quantity,
+      stock_quantity: updatedProduct.stock_quantity,
+      barcode: updatedProduct.barcode || '',
+      volume: updatedProduct.volume || '',
+      brand: updatedProduct.brand || '',
+      alcohol_content: updatedProduct.alcohol_percentage,
+      min_stock_level: updatedProduct.min_stock_level,
+      status: updatedProduct.status
+    };
+
+    res.json({
+      message: 'Product updated successfully',
+      data: responseProduct
+    });
 
   } catch (error) {
     console.error('Update product error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    if (error.code === 11000) {
+      res.status(400).json({ message: 'Product with this barcode already exists' });
+    } else {
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
   }
 });
 
-// Get low stock products
-router.get('/alerts/low-stock', verifyToken, async (req, res) => {
+// Delete product (Manager+ only)
+router.delete('/:id', [verifyToken, requireManager], async (req, res) => {
   try {
-    const [products] = await db.execute(`
-      SELECT 
-        p.*,
-        c.name as category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.stock_quantity <= p.min_stock_level AND p.status = 'active'
-      ORDER BY (p.stock_quantity / p.min_stock_level) ASC
-    `);
+    const { id } = req.params;
 
-    res.json({ lowStockProducts: products });
+    const deletedProduct = await Product.findByIdAndUpdate(
+      id,
+      { status: 'inactive' },
+      { new: true }
+    );
+
+    if (!deletedProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    res.json({
+      message: 'Product deleted successfully',
+      data: { id: deletedProduct._id.toString() }
+    });
 
   } catch (error) {
-    console.error('Low stock error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Get all categories
-router.get('/categories/all', verifyToken, async (req, res) => {
-  try {
-    const [categories] = await db.execute(`
-      SELECT 
-        c.*,
-        parent.name as parent_name,
-        COUNT(p.id) as product_count
-      FROM categories c
-      LEFT JOIN categories parent ON c.parent_id = parent.id
-      LEFT JOIN products p ON c.id = p.category_id OR c.id = p.subcategory_id
-      GROUP BY c.id
-      ORDER BY c.parent_id IS NULL DESC, c.name
-    `);
-
-    res.json({ categories });
-
-  } catch (error) {
-    console.error('Get categories error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Delete product error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
 
