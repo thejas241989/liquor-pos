@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fetch Cost Functionality</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Fetch Cost Functionality</h1>
+    
+    <div class="test-section">
+        <h3>1. Test API Connection</h3>
+        <button class="button" onclick="testApiConnection()">Test API Connection</button>
+        <div id="api-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Test Products Endpoint</h3>
+        <button class="button" onclick="testProductsEndpoint()">Fetch Products</button>
+        <div id="products-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Test Stock Inward Endpoint</h3>
+        <button class="button" onclick="testStockInwardEndpoint()">Fetch Stock Inward History</button>
+        <div id="stock-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Test Cost Fetch Logic</h3>
+        <button class="button" onclick="testCostFetchLogic()">Test Cost Fetch Logic</button>
+        <div id="cost-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5002/api';
+        
+        async function testApiConnection() {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/reports/test`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ API Connection Successful: ${data.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ API Error: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Connection Failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testProductsEndpoint() {
+            const resultDiv = document.getElementById('products-result');
+            resultDiv.innerHTML = 'Fetching products...';
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_BASE}/products`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const products = data.data;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Products Fetched Successfully (${products.length} products)
+                            <br><br>
+                            <strong>Sample Products:</strong>
+                            <ul>
+                                ${products.slice(0, 3).map(p => `
+                                    <li>ID: ${p._id}, Name: ${p.name}, Cost: ${p.cost_price || 'N/A'}</li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Products Error: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Products Failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testStockInwardEndpoint() {
+            const resultDiv = document.getElementById('stock-result');
+            resultDiv.innerHTML = 'Fetching stock inward history...';
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_BASE}/stock/inward?page=1&limit=5`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok && data.message) {
+                    const records = data.data;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Stock Inward History Fetched (${records.length} records)
+                            <br><br>
+                            <strong>Sample Records:</strong>
+                            <ul>
+                                ${records.slice(0, 3).map(r => `
+                                    <li>
+                                        Product ID: ${typeof r.product_id === 'object' ? r.product_id._id : r.product_id}, 
+                                        Cost: ${r.cost_per_unit}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Stock Inward Error: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Stock Inward Failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testCostFetchLogic() {
+            const resultDiv = document.getElementById('cost-result');
+            resultDiv.innerHTML = 'Testing cost fetch logic...';
+            
+            try {
+                // First get products
+                const token = localStorage.getItem('token');
+                const productsResponse = await fetch(`${API_BASE}/products`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const productsData = await productsResponse.json();
+                
+                if (!productsData.success) {
+                    resultDiv.innerHTML = `<div class="error">❌ Failed to fetch products for cost test</div>`;
+                    return;
+                }
+                
+                const products = productsData.data;
+                
+                // Then get stock inward records
+                const stockResponse = await fetch(`${API_BASE}/stock/inward?page=1&limit=5`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const stockData = await stockResponse.json();
+                
+                if (!stockData.message) {
+                    resultDiv.innerHTML = `<div class="error">❌ Failed to fetch stock records for cost test</div>`;
+                    return;
+                }
+                
+                const records = stockData.data;
+                
+                // Test the cost fetch logic
+                let testResults = [];
+                
+                for (const record of records.slice(0, 3)) {
+                    const productId = typeof record.product_id === 'object' ? record.product_id._id : record.product_id;
+                    const product = products.find(p => p._id === productId);
+                    
+                    testResults.push({
+                        recordId: record._id,
+                        productId: productId,
+                        productName: product ? product.name : 'Not Found',
+                        currentCost: record.cost_per_unit,
+                        productCost: product ? product.cost_price : 'N/A',
+                        match: product && product.cost_price === record.cost_per_unit
+                    });
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ Cost Fetch Logic Test Results:
+                        <br><br>
+                        <table border="1" style="border-collapse: collapse; width: 100%;">
+                            <tr>
+                                <th>Record ID</th>
+                                <th>Product</th>
+                                <th>Current Cost</th>
+                                <th>Product Cost</th>
+                                <th>Match</th>
+                            </tr>
+                            ${testResults.map(r => `
+                                <tr>
+                                    <td>${r.recordId.substring(0, 8)}...</td>
+                                    <td>${r.productName}</td>
+                                    <td>${r.currentCost}</td>
+                                    <td>${r.productCost}</td>
+                                    <td>${r.match ? '✅' : '❌'}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Cost Test Failed: ${error.message}</div>`;
+            }
+        }
+        
+        // Auto-run API connection test on page load
+        window.onload = function() {
+            testApiConnection();
+        };
+    </script>
+</body>
+</html>

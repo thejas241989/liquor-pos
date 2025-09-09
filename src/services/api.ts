@@ -6,6 +6,12 @@ interface ApiResponse<T = any> {
   message?: string;
   data?: T;
   error?: string;
+  pagination?: {
+    current_page: number;
+    total_pages: number;
+    total_items: number;
+    items_per_page: number;
+  };
 }
 
 class ApiService {
@@ -17,7 +23,7 @@ class ApiService {
     };
   }
 
-  private async request<T = any>(
+  public async request<T = any>(
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
@@ -45,6 +51,7 @@ class ApiService {
         success: true,
         data: data.data || data,
         message: data.message,
+        pagination: data.pagination,
       };
     } catch (error) {
       return {
@@ -52,6 +59,22 @@ class ApiService {
         error: error instanceof Error ? error.message : 'Network error',
       };
     }
+  }
+
+  public async requestWithParams<T = any>(
+    endpoint: string, 
+    params: Record<string, any> = {},
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const queryString = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryString.append(key, value.toString());
+      }
+    });
+    
+    const url = queryString.toString() ? `${endpoint}?${queryString.toString()}` : endpoint;
+    return this.request<T>(url, options);
   }
 
   // Auth endpoints

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Logic Verification Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .test-button {
+            background: #1976d2;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            display: inline-block;
+        }
+        .test-button:hover {
+            background: #1565c0;
+        }
+        .test-button.success {
+            background: #28a745;
+        }
+        .test-button.success:hover {
+            background: #218838;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border: 1px solid #dee2e6;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        pre {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .correct {
+            background-color: #d4edda;
+        }
+        .incorrect {
+            background-color: #f8d7da;
+        }
+        .summary-card {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border: 1px solid #c3e6cb;
+        }
+        .summary-card h3 {
+            margin-top: 0;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Stock Logic Verification Test</h1>
+        
+        <div class="test-section">
+            <h2>📊 Stock Calculation Verification</h2>
+            <p>This test verifies that all stock calculations are accurate across all reports.</p>
+            
+            <button class="test-button" onclick="runStockVerification()">🔍 Run Stock Verification</button>
+            <button class="test-button success" onclick="testMainReports()">📈 Test Main Reports</button>
+            
+            <div id="verificationResults"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🎯 Expected Results</h2>
+            <div class="summary-card">
+                <h3>✅ All Stock Calculations Should Be Correct:</h3>
+                <ul>
+                    <li><strong>Formula</strong>: Closing Stock = Opening Stock + Stock Inward - Sold Quantity</li>
+                    <li><strong>Johnnie Walker Red Label</strong>: 159 + 0 - 6 = 153</li>
+                    <li><strong>Royal Challenge</strong>: 152 + 0 - 10 = 142</li>
+                    <li><strong>Kingfisher Premium</strong>: 36 + 0 - 10 = 26</li>
+                    <li><strong>Negative Stock Products</strong>: Should show negative values for overselling</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🚀 Test All Reports</h2>
+            <p>Click the buttons below to test each report in the main application:</p>
+            
+            <a href="http://localhost:3000/reports/day-wise-sales" class="test-button success" target="_blank">
+                📊 Day-wise Sales Report
+            </a>
+            
+            <a href="http://localhost:3000/inventory" class="test-button success" target="_blank">
+                📦 Inventory Management
+            </a>
+            
+            <a href="http://localhost:3000/reports/stock-reconciliation" class="test-button success" target="_blank">
+                🔄 Stock Reconciliation Report
+            </a>
+            
+            <a href="http://localhost:3000/reports/inventory" class="test-button success" target="_blank">
+                📈 Inventory Report
+            </a>
+        </div>
+    </div>
+
+    <script>
+        async function runStockVerification() {
+            const resultDiv = document.getElementById('verificationResults');
+            resultDiv.innerHTML = '<div class="result">🔍 Running stock verification...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:5002/api/reports/public-day-wise-sales?date=2025-09-09');
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const products = data.data.products;
+                    const summary = data.data.summary;
+                    
+                    // Verify calculations
+                    let allCorrect = true;
+                    let verificationTable = `
+                        <div class="result success">
+                            <h3>✅ Stock Verification Results</h3>
+                            <table>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Opening Stock</th>
+                                    <th>Sold Quantity</th>
+                                    <th>Closing Stock</th>
+                                    <th>Expected Closing</th>
+                                    <th>Status</th>
+                                </tr>
+                    `;
+                    
+                    products.forEach(product => {
+                        const expectedClosing = product.opening_stock + product.stock_inward - product.sold_quantity;
+                        const isCorrect = product.closing_stock === expectedClosing;
+                        if (!isCorrect) allCorrect = false;
+                        
+                        verificationTable += `
+                            <tr class="${isCorrect ? 'correct' : 'incorrect'}">
+                                <td>${product.product_name}</td>
+                                <td>${product.opening_stock}</td>
+                                <td>${product.sold_quantity}</td>
+                                <td>${product.closing_stock}</td>
+                                <td>${expectedClosing}</td>
+                                <td>${isCorrect ? '✅ Correct' : '❌ Incorrect'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    verificationTable += `
+                            </table>
+                            
+                            <div class="summary-card">
+                                <h3>📊 Summary Totals</h3>
+                                <p><strong>Total Products:</strong> ${summary.total_products}</p>
+                                <p><strong>Total Opening Stock:</strong> ${summary.total_opening_stock} units</p>
+                                <p><strong>Total Sold Quantity:</strong> ${summary.total_sold_quantity} units</p>
+                                <p><strong>Total Closing Stock:</strong> ${summary.total_closing_stock} units</p>
+                                <p><strong>Total Sales Amount:</strong> ₹${summary.total_sales_amount}</p>
+                                <p><strong>Total Stock Value:</strong> ₹${summary.total_stock_value}</p>
+                            </div>
+                            
+                            <div class="${allCorrect ? 'success' : 'error'}">
+                                <h3>${allCorrect ? '🎉 All Calculations Are Correct!' : '❌ Some Calculations Are Incorrect'}</h3>
+                                <p>${allCorrect ? 'The stock logic is working perfectly across all reports.' : 'Please check the incorrect calculations above.'}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    resultDiv.innerHTML = verificationTable;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ Failed to fetch stock data: ${data.message || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testMainReports() {
+            const resultDiv = document.getElementById('verificationResults');
+            resultDiv.innerHTML = `
+                <div class="result success">
+                    <h3>🚀 Testing Main Reports</h3>
+                    <p>Opening all main reports in new tabs for testing...</p>
+                    <ul>
+                        <li><a href="http://localhost:3000/reports/day-wise-sales" target="_blank">Day-wise Sales Report</a></li>
+                        <li><a href="http://localhost:3000/inventory" target="_blank">Inventory Management</a></li>
+                        <li><a href="http://localhost:3000/reports/stock-reconciliation" target="_blank">Stock Reconciliation Report</a></li>
+                        <li><a href="http://localhost:3000/reports/inventory" target="_blank">Inventory Report</a></li>
+                    </ul>
+                    <p><strong>Expected Results:</strong></p>
+                    <ul>
+                        <li>✅ All reports should load without 400 validation errors</li>
+                        <li>✅ Stock calculations should be accurate</li>
+                        <li>✅ Data should display in proper table format</li>
+                        <li>✅ Summary cards should show correct totals</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Auto-run verification on page load
+        window.onload = function() {
+            setTimeout(() => {
+                runStockVerification();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

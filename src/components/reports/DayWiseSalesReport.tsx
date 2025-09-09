@@ -1,206 +1,306 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Download, Calendar, TrendingUp, Package, DollarSign } from 'lucide-react';
 
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(v || 0);
-
-interface DayWiseSalesItem {
-  date: string;
-  productName: string;
-  categoryName: string;
-  openingStock: number;
-  stockInward: number;
-  soldQuantity: number;
-  closingStock: number;
-  averageSellingPrice: number;
-  totalSalesValue: number;
-}
-
-interface DayWiseSalesData {
-  reports: DayWiseSalesItem[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalRecords: number;
-    limit: number;
-  };
+interface DayWiseSalesReportData {
+  report_date: string;
   summary: {
-    totalSoldQuantity: number;
-    totalSalesValue: number;
-    totalStockInward: number;
+    total_products: number;
+    total_opening_stock: number;
+    total_stock_inward: number;
+    total_sold_quantity: number;
+    total_closing_stock: number;
+    total_sales_amount: number;
+    total_stock_value: number;
   };
-  dateRange: {
-    startDate: string;
-    endDate: string;
-  };
+  products: Array<{
+    si_no: number;
+    product_name: string;
+    category_name: string;
+    opening_stock: number;
+    stock_inward: number;
+    sold_quantity: number;
+    closing_stock: number;
+    total_sales_amount: number;
+    stock_value: number;
+  }>;
 }
 
-const DayWiseSalesReport: React.FC<{ data: DayWiseSalesData }> = ({ data }) => {
-  const { reports, summary, dateRange, pagination } = data || {};
+const DayWiseSalesReport: React.FC = () => {
+  const [reportData, setReportData] = useState<DayWiseSalesReportData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const generateReport = useCallback(async () => {
+    if (!reportDate) {
+      setError('Please select a date');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      console.log('🔍 Fetching day-wise sales report for date:', reportDate);
+      
+      // Use the authenticated endpoint with proper token
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5002/api/reports/day-wise-sales?date=${reportDate}&cache=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📡 API Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('📊 API Response data:', data);
+      
+      if (data.success && data.data) {
+        setReportData(data.data);
+        console.log('✅ Report data set successfully');
+      } else {
+        throw new Error(data.message || 'Failed to fetch report data');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching report:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch report data');
+    } finally {
+      setLoading(false);
+    }
+  }, [reportDate]);
+
+  useEffect(() => {
+    generateReport();
+  }, [generateReport]);
+
+  const exportToCSV = () => {
+    if (!reportData) return;
+
+    const csvContent = [
+      ['Day-wise Sales Report', reportData.report_date],
+      [''],
+      ['Summary'],
+      ['Total Products', reportData.summary.total_products],
+      ['Total Opening Stock', reportData.summary.total_opening_stock],
+      ['Total Stock Inward', reportData.summary.total_stock_inward],
+      ['Total Sold Quantity', reportData.summary.total_sold_quantity],
+      ['Total Closing Stock', reportData.summary.total_closing_stock],
+      ['Total Sales Amount', reportData.summary.total_sales_amount],
+      ['Total Stock Value', reportData.summary.total_stock_value],
+      [''],
+      ['Product Details'],
+      ['SI No', 'Product Name', 'Category', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value'],
+      ...reportData.products.map(product => [
+        product.si_no,
+        product.product_name,
+        product.category_name,
+        product.opening_stock,
+        product.stock_inward,
+        product.sold_quantity,
+        product.closing_stock,
+        product.total_sales_amount,
+        product.stock_value
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `day-wise-sales-${reportDate}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR'
+    }).format(amount);
+  };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Day-Wise Sales Report</h2>
-          <div className="text-sm text-gray-600">
-            Period: {dateRange?.startDate} to {dateRange?.endDate}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <TrendingUp className="h-6 w-6 text-blue-600" />
+              Day-wise Sales Report
+            </h1>
+            <p className="text-gray-600 mt-1">Daily stock movements and sales analysis</p>
           </div>
-        </div>
-        <div className="text-sm text-gray-600">
-          Total Sold: <span className="font-medium">{summary?.totalSoldQuantity || 0} units</span>
-          <span className="mx-2">|</span>
-          Total Sales: <span className="font-medium">{formatCurrency(summary?.totalSalesValue || 0)}</span>
-          <span className="mx-2">|</span>
-          Total Inward: <span className="font-medium">{summary?.totalStockInward || 0} units</span>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="text-blue-600 text-sm font-medium">Total Quantity Sold</div>
-          <div className="text-2xl font-bold text-blue-700">{summary?.totalSoldQuantity || 0}</div>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-green-600 text-sm font-medium">Total Sales Value</div>
-          <div className="text-2xl font-bold text-green-700">{formatCurrency(summary?.totalSalesValue || 0)}</div>
-        </div>
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <div className="text-orange-600 text-sm font-medium">Stock Inward</div>
-          <div className="text-2xl font-bold text-orange-700">{summary?.totalStockInward || 0}</div>
-        </div>
-      </div>
-
-      {/* Sales Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Category
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Opening Stock
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock Inward
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sold Qty
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Closing Stock
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Avg Price
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sales Value
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {reports?.map((item, idx) => (
-                <tr key={`${item.date}-${item.productName}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(item.date).toLocaleDateString('en-IN')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{item.productName}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      {item.categoryName}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {item.openingStock}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-green-600 font-medium">
-                    +{item.stockInward}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-red-600 font-medium">
-                    -{item.soldQuantity}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 font-medium">
-                    {item.closingStock}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                    {formatCurrency(item.averageSellingPrice)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                    {formatCurrency(item.totalSalesValue)}
-                  </td>
-                </tr>
-              ))}
-              {(!reports || reports.length === 0) && (
-                <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
-                    No sales records found for the selected date range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {summary && (reports?.length || 0) > 0 && (
-              <tfoot className="bg-gray-50">
-                <tr>
-                  <td colSpan={5} className="px-6 py-4 text-right text-sm font-medium text-gray-900">
-                    Totals:
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-red-600">
-                    -{summary.totalSoldQuantity}
-                  </td>
-                  <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900">
-                    {formatCurrency(summary.totalSalesValue)}
-                  </td>
-                </tr>
-              </tfoot>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-gray-500" />
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={generateReport}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? 'Loading...' : 'Generate Report'}
+            </button>
+            {reportData && (
+              <button
+                onClick={exportToCSV}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
             )}
-          </table>
+          </div>
         </div>
+      </div>
 
-        {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                Previous
-              </button>
-              <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                Next
-              </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing page <span className="font-medium">{pagination.currentPage}</span> of{' '}
-                  <span className="font-medium">{pagination.totalPages}</span> 
-                  {' '}({pagination.totalRecords} total records)
-                </p>
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 bg-red-500 rounded-full"></div>
+            <span className="text-red-800 font-medium">Error</span>
+          </div>
+          <p className="text-red-700 mt-1">{error}</p>
+          <button
+            onClick={generateReport}
+            className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading report data...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Report Data */}
+      {reportData && !loading && (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Package className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-900">{reportData.summary.total_products}</p>
+                </div>
               </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                    Previous
-                  </button>
-                  <button className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                    Next
-                  </button>
-                </nav>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <Package className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Stock Inward</p>
+                  <p className="text-2xl font-bold text-gray-900">{reportData.summary.total_stock_inward}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Sales</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData.summary.total_sales_amount)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Stock Value</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData.summary.total_stock_value)}</p>
+                </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Detailed Table */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Product Details</h2>
+              <p className="text-sm text-gray-600">Report Date: {new Date(reportData.report_date).toLocaleDateString()}</p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SI No</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opening Stock</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Inward</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Quantity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closing Stock</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reportData.products.map((product) => (
+                    <tr key={product.si_no} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.si_no}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.product_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.opening_stock}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.stock_inward}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.sold_quantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.closing_stock}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.total_sales_amount)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.stock_value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* No Data State */}
+      {!reportData && !loading && !error && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="text-center">
+            <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Report Data</h3>
+            <p className="text-gray-600">Select a date and generate a report to view data.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

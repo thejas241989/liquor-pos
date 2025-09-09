@@ -15,8 +15,8 @@ const dailyStockSchema = new mongoose.Schema({
   opening_stock: {
     type: Number,
     required: true,
-    min: 0,
     default: 0
+    // Removed min: 0 to allow negative stock values (overselling scenario)
   },
   stock_inward: {
     type: Number,
@@ -30,14 +30,14 @@ const dailyStockSchema = new mongoose.Schema({
   },
   closing_stock: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
+    // Removed min: 0 to allow negative stock values (overselling scenario)
   },
   // Calculated fields for reporting
   stock_value: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
+    // Removed min: 0 to allow negative stock values (overselling scenario)
   },
   cost_per_unit: {
     type: Number,

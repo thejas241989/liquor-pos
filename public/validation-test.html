@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation Test - Liquor POS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #f44336;
+        }
+        .test-link {
+            display: inline-block;
+            background: #1976d2;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 10px 10px 10px 0;
+            transition: background 0.3s;
+        }
+        .test-link:hover {
+            background: #1565c0;
+        }
+        .credentials {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #ff9800;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Validation Error Test</h1>
+        
+        <div class="test-section">
+            <h2>📊 Day-wise Sales Report Validation Test</h2>
+            
+            <div class="credentials">
+                <strong>Login Credentials:</strong><br>
+                Username: <code>admin</code><br>
+                Password: <code>admin123</code>
+            </div>
+            
+            <a href="http://localhost:3000/reports/day-wise-sales" class="test-link" target="_blank">
+                🎯 Test Main App Day-wise Sales Report
+            </a>
+            
+            <div id="mainAppStatus" class="status">
+                Testing main application...
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🔌 API Validation Test</h2>
+            
+            <div id="apiStatus" class="status">
+                Testing API endpoints...
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>📋 Troubleshooting Steps</h2>
+            <ol>
+                <li>Click the "Test Main App" link above</li>
+                <li>Login with the credentials provided</li>
+                <li>Check if the day-wise sales report loads</li>
+                <li>Look for any error messages in the browser console (F12)</li>
+                <li>Check if data appears in the report</li>
+            </ol>
+            
+            <h3>Expected Results:</h3>
+            <ul>
+                <li>✅ Report should load without errors</li>
+                <li>✅ Should show 8 products</li>
+                <li>✅ Should show ₹4,235 total sales</li>
+                <li>✅ Should show 5 items sold</li>
+                <li>❌ If you see validation errors, please describe them</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test main application
+        async function testMainApp() {
+            try {
+                const response = await fetch('http://localhost:3000');
+                if (response.ok) {
+                    document.getElementById('mainAppStatus').innerHTML = '✅ Main Application: Accessible';
+                    document.getElementById('mainAppStatus').className = 'status success';
+                } else {
+                    throw new Error('Main app not responding');
+                }
+            } catch (error) {
+                document.getElementById('mainAppStatus').innerHTML = '❌ Main Application: ' + error.message;
+                document.getElementById('mainAppStatus').className = 'status error';
+            }
+        }
+        
+        // Test API endpoints
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:5002/api/reports/public-day-wise-sales?date=2025-09-09');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('apiStatus').innerHTML = `
+                        ✅ API Endpoints: Working<br>
+                        📊 Products: ${data.data.summary.total_products}<br>
+                        💰 Sales: ₹${data.data.summary.total_sales_amount.toLocaleString()}<br>
+                        📦 Stock: ${data.data.summary.total_closing_stock}
+                    `;
+                    document.getElementById('apiStatus').className = 'status success';
+                } else {
+                    throw new Error(data.message || 'API returned error');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = '❌ API Endpoints: ' + error.message;
+                document.getElementById('apiStatus').className = 'status error';
+            }
+        }
+        
+        // Run tests
+        testMainApp();
+        testAPI();
+    </script>
+</body>
+</html>
+

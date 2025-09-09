@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Stock Inward</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Stock Inward</h1>
+    
+    <div class="test-section">
+        <h3>1. Login</h3>
+        <button class="button" onclick="login()">Login as Admin</button>
+        <div id="login-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Test Stock Inward</h3>
+        <button class="button" onclick="testStockInward()">Test Stock Inward</button>
+        <div id="stock-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5002/api';
+        let token = '';
+        
+        async function login() {
+            const resultDiv = document.getElementById('login-result');
+            resultDiv.innerHTML = 'Logging in...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+                });
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    resultDiv.innerHTML = `<div class="success">✅ Login successful! Role: ${data.user.role}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Login failed: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Login error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testStockInward() {
+            const resultDiv = document.getElementById('stock-result');
+            resultDiv.innerHTML = 'Testing stock inward...';
+            
+            if (!token) {
+                resultDiv.innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const testData = {
+                    items: [{
+                        product_id: '68be73ddfde99e43918e65f3',
+                        quantity: 1,
+                        cost_per_unit: 100
+                    }],
+                    supplier_name: 'Test Supplier',
+                    invoice_number: 'TEST001',
+                    notes: 'Test stock inward'
+                };
+                
+                console.log('🔄 Sending stock inward data:', testData);
+                
+                const response = await fetch(`${API_BASE}/stock/inward/bulk`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                const data = await response.json();
+                console.log('📦 Stock inward response:', data);
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ Stock inward successful! ${JSON.stringify(data, null, 2)}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Stock inward failed: ${data.message || data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Stock inward error: ${error.message}</div>`;
+            }
+        }
+        
+        // Auto-login on page load
+        window.onload = function() {
+            login();
+        };
+    </script>
+</body>
+</html>

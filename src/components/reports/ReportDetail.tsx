@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import PageHeader from '../common/PageHeader';
 import { apiService } from '../../services/api';
@@ -17,7 +17,15 @@ const ReportDetail: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
+    // Skip API calls for reports that handle their own data fetching
+    if (reportId === 'day-wise-sales' || reportId === 'stock-reconciliation') {
+      setLoading(false);
+      setError(null);
+      setData(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -37,11 +45,11 @@ const ReportDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [reportId, location.search]);
 
   useEffect(() => {
     if (reportId) fetchReport();
-  }, [reportId, location.search]);
+  }, [reportId, fetchReport]);
 
   // Auto-refresh for daily sales report every 30 seconds
   useEffect(() => {
@@ -52,7 +60,7 @@ const ReportDetail: React.FC = () => {
 
       return () => clearInterval(interval);
     }
-  }, [reportId, location.search]);
+  }, [reportId, fetchReport]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -85,8 +93,8 @@ const ReportDetail: React.FC = () => {
             {reportId === 'daily-sales' && <DailySalesReport data={data} />}
             {reportId === 'top-products' && <TopProductsReport data={data} />}
             {reportId === 'inventory' && <InventoryReport data={data} />}
-            {reportId === 'day-wise-sales' && <DayWiseSalesReport data={data} />}
-            {reportId === 'stock-reconciliation' && <StockReconciliationReport data={data} />}
+            {reportId === 'day-wise-sales' && <DayWiseSalesReport />}
+            {reportId === 'stock-reconciliation' && <StockReconciliationReport />}
             {reportId === 'current-stock' && <InventoryReport data={data} />}
             {reportId === 'biller-performance' && <BillerPerformanceReport data={data} />}
             {reportId === 'monthly-sales' && <DailySalesReport data={data} />}

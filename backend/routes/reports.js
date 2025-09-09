@@ -15,6 +15,202 @@ router.get('/test', (req, res) => {
   res.json({ message: 'Reports routes are working!', timestamp: new Date() });
 });
 
+// Public day-wise sales report (no authentication required)
+router.get('/public-day-wise-sales', async (req, res) => {
+  try {
+    const { date, category_id } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
+    }
+
+    const reportDate = new Date(date);
+    reportDate.setHours(0, 0, 0, 0);
+
+    // Get daily stock records for the date
+    const dailyStockRecords = await DailyStock.find({
+      date: {
+        $gte: reportDate,
+        $lt: new Date(reportDate.getTime() + 24 * 60 * 60 * 1000)
+      }
+    }).populate('product_id', 'name category_id cost_price selling_price');
+
+    // Get sales for the date
+    const startDate = new Date(reportDate);
+    const endDate = new Date(reportDate.getTime() + 24 * 60 * 60 * 1000);
+    
+    const sales = await Sale.find({
+      sale_date: {
+        $gte: startDate,
+        $lt: endDate
+      }
+    }).populate('items.product_id', 'name category_id');
+
+    // Process the data
+    const productMap = new Map();
+    
+    // Initialize with daily stock data
+    dailyStockRecords.forEach(record => {
+      const productId = record.product_id._id.toString();
+      productMap.set(productId, {
+        si_no: productMap.size + 1,
+        product_name: record.product_id.name,
+        category_name: record.product_id.category_id?.name || 'Unknown',
+        opening_stock: record.opening_stock,
+        stock_inward: record.stock_inward,
+        sold_quantity: 0,
+        closing_stock: record.closing_stock,
+        total_sales_amount: 0,
+        stock_value: record.closing_stock * record.product_id.cost_price
+      });
+    });
+
+    // Add sales data
+    sales.forEach(sale => {
+      sale.items.forEach(item => {
+        const productId = item.product_id._id.toString();
+        if (productMap.has(productId)) {
+          const product = productMap.get(productId);
+          product.sold_quantity += item.quantity;
+          product.total_sales_amount += item.line_total;
+        }
+      });
+    });
+
+    const products = Array.from(productMap.values());
+    
+    // Calculate summary
+    const summary = {
+      total_products: products.length,
+      total_opening_stock: products.reduce((sum, p) => sum + p.opening_stock, 0),
+      total_sold_quantity: products.reduce((sum, p) => sum + p.sold_quantity, 0),
+      total_closing_stock: products.reduce((sum, p) => sum + p.closing_stock, 0),
+      total_sales_amount: products.reduce((sum, p) => sum + p.total_sales_amount, 0),
+      total_stock_value: products.reduce((sum, p) => sum + p.stock_value, 0)
+    };
+
+    res.json({
+      success: true,
+      data: {
+        report_date: reportDate.toISOString(),
+        summary,
+        products
+      }
+    });
+  } catch (error) {
+    console.error('Public day-wise sales report error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Public daily sales report (no authentication required)
+router.get('/public-daily-sales', async (req, res) => {
+  try {
+    const { date, start_date, end_date } = req.query;
+    
+    // Determine date range
+    let startDate, endDate;
+    if (date) {
+      startDate = new Date(date);
+      endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1);
+    } else if (start_date && end_date) {
+      startDate = new Date(start_date);
+      endDate = new Date(end_date);
+      endDate.setDate(endDate.getDate() + 1);
+    } else {
+      // Default to today
+      startDate = new Date();
+      endDate = new Date();
+      endDate.setDate(endDate.getDate() + 1);
+    }
+
+    console.log('Date range:', { startDate, endDate });
+
+    // Get sales data for the date range
+    const sales = await Sale.find({
+      sale_date: {
+        $gte: startDate,
+        $lt: endDate
+      }
+    })
+    .populate('items.product_id', 'name category_id')
+    .populate('items.product_id.category_id', 'name')
+    .populate('biller_id', 'username name');
+
+    console.log('Found sales:', sales.length);
+
+    // Group sales by category and product
+    const salesByCategory = {};
+    const salesByProduct = {};
+
+    sales.forEach(sale => {
+      sale.items.forEach(item => {
+        const product = item.product_id;
+        const category = product.category_id;
+        
+        if (!salesByCategory[category._id]) {
+          salesByCategory[category._id] = {
+            category_id: category._id,
+            category_name: category.name,
+            total_quantity: 0,
+            total_amount: 0,
+            products: {}
+          };
+        }
+        
+        if (!salesByProduct[product._id]) {
+          salesByProduct[product._id] = {
+            product_id: product._id,
+            product_name: product.name,
+            category_id: category._id,
+            category_name: category.name,
+            total_quantity: 0,
+            total_amount: 0
+          };
+        }
+        
+        salesByCategory[category._id].total_quantity += item.quantity;
+        salesByCategory[category._id].total_amount += item.line_total;
+        salesByCategory[category._id].products[product._id] = true;
+        
+        salesByProduct[product._id].total_quantity += item.quantity;
+        salesByProduct[product._id].total_amount += item.line_total;
+      });
+    });
+
+    const categoryData = Object.values(salesByCategory);
+    const productData = Object.values(salesByProduct);
+
+    res.json({
+      success: true,
+      data: {
+        date_range: { startDate, endDate },
+        total_sales: sales.length,
+        total_amount: sales.reduce((sum, sale) => sum + sale.total_amount, 0),
+        categories: categoryData,
+        products: productData,
+        sales: sales.map(sale => ({
+          invoice_no: sale.invoice_no,
+          sale_date: sale.sale_date,
+          total_amount: sale.total_amount,
+          biller: sale.biller_id?.username || 'Unknown',
+          items_count: sale.items.length
+        }))
+      },
+      message: 'Daily sales report generated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error generating daily sales report:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: error.message 
+    });
+  }
+});
+
 // Daily Sales Report
 router.get('/daily-sales', [
   verifyToken,
@@ -286,8 +482,8 @@ router.get('/inventory-summary', [verifyToken], async (req, res) => {
 // Day-Wise Sales Report
 router.get('/day-wise-sales', [
   verifyToken,
-  query('startDate').isISO8601().withMessage('Start date must be a valid date'),
-  query('endDate').isISO8601().withMessage('End date must be a valid date'),
+  query('date').isISO8601().withMessage('Date must be a valid date (YYYY-MM-DD)'),
+  query('category_id').optional().isMongoId(),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
 ], async (req, res) => {
@@ -297,15 +493,18 @@ router.get('/day-wise-sales', [
       return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
     }
 
-    const { startDate, endDate, page = 1, limit = 10 } = req.query;
+    const { date, category_id, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
+
+    const reportDate = new Date(date);
+    reportDate.setHours(0, 0, 0, 0);
 
     const pipeline = [
       {
         $match: {
           date: {
-            $gte: new Date(startDate),
-            $lte: new Date(endDate)
+            $gte: reportDate,
+            $lt: new Date(reportDate.getTime() + 24 * 60 * 60 * 1000)
           }
         }
       },
@@ -392,15 +591,29 @@ router.get('/day-wise-sales', [
     const summary = result[0].summary[0] || { totalSoldQuantity: 0, totalSalesValue: 0, totalStockInward: 0 };
 
     res.json({
-      reports,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / limit),
-        totalRecords: totalCount,
-        limit: parseInt(limit)
-      },
-      summary,
-      dateRange: { startDate, endDate }
+      success: true,
+      data: {
+        report_date: reportDate.toISOString(),
+        summary: {
+          total_products: reports.length,
+          total_opening_stock: reports.reduce((sum, r) => sum + (r.openingStock || 0), 0),
+          total_sold_quantity: reports.reduce((sum, r) => sum + (r.soldQuantity || 0), 0),
+          total_closing_stock: reports.reduce((sum, r) => sum + (r.closingStock || 0), 0),
+          total_sales_amount: reports.reduce((sum, r) => sum + (r.totalSalesValue || 0), 0),
+          total_stock_value: reports.reduce((sum, r) => sum + (r.totalSalesValue || 0), 0)
+        },
+        products: reports.map((report, index) => ({
+          si_no: index + 1,
+          product_name: report.productName,
+          category_name: report.categoryName,
+          opening_stock: report.openingStock || 0,
+          stock_inward: report.stockInward || 0,
+          sold_quantity: report.soldQuantity || 0,
+          closing_stock: report.closingStock || 0,
+          total_sales_amount: report.totalSalesValue || 0,
+          stock_value: report.totalSalesValue || 0
+        }))
+      }
     });
 
   } catch (error) {
@@ -843,6 +1056,217 @@ router.get('/biller-performance', [
     console.error('Biller performance report error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Day-wise sales report
+router.get('/day-wise-sales', [verifyToken], async (req, res) => {
+  try {
+    const { date, category_id } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
+    }
+
+    const reportDate = new Date(date);
+    reportDate.setHours(0, 0, 0, 0);
+
+    // Get daily stock records for the date
+    const pipeline = [
+      {
+        $match: {
+          date: reportDate
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      {
+        $unwind: '$product'
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.category_id',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      {
+        $unwind: '$category'
+      }
+    ];
+
+    if (category_id) {
+      pipeline.push({
+        $match: { 'product.category_id': new mongoose.Types.ObjectId(category_id) }
+      });
+    }
+
+    // Get sales data for the same date
+    const salesPipeline = [
+      {
+        $match: {
+          sale_date: {
+            $gte: reportDate,
+            $lt: new Date(reportDate.getTime() + 24 * 60 * 60 * 1000)
+          }
+        }
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      {
+        $unwind: '$product'
+      },
+      {
+        $group: {
+          _id: '$items.product_id',
+          total_sold: { $sum: '$items.quantity' },
+          total_sales_amount: { $sum: '$items.line_total' }
+        }
+      }
+    ];
+
+    const [dailyStocks, salesData] = await Promise.all([
+      DailyStock.aggregate(pipeline),
+      Sale.aggregate(salesPipeline)
+    ]);
+
+    // Combine daily stock with sales data
+    const salesMap = new Map();
+    salesData.forEach(sale => {
+      salesMap.set(sale._id.toString(), {
+        total_sold: sale.total_sold,
+        total_sales_amount: sale.total_sales_amount
+      });
+    });
+
+    const reportData = dailyStocks.map((stock, index) => {
+      const sales = salesMap.get(stock.product_id.toString()) || { total_sold: 0, total_sales_amount: 0 };
+      
+      return {
+        si_no: index + 1,
+        product_name: stock.product.name,
+        category_name: stock.category.name,
+        opening_stock: stock.opening_stock,
+        stock_inward: stock.stock_inward,
+        sold_quantity: sales.total_sold,
+        closing_stock: stock.closing_stock,
+        total_sales_amount: sales.total_sales_amount,
+        stock_value: stock.stock_value
+      };
+    });
+
+    // Calculate summary
+    const summary = {
+      total_products: reportData.length,
+      total_opening_stock: reportData.reduce((sum, item) => sum + item.opening_stock, 0),
+      total_stock_inward: reportData.reduce((sum, item) => sum + item.stock_inward, 0),
+      total_sold_quantity: reportData.reduce((sum, item) => sum + item.sold_quantity, 0),
+      total_closing_stock: reportData.reduce((sum, item) => sum + item.closing_stock, 0),
+      total_sales_amount: reportData.reduce((sum, item) => sum + item.total_sales_amount, 0),
+      total_stock_value: reportData.reduce((sum, item) => sum + item.stock_value, 0)
+    };
+
+    res.json({
+      message: 'Day-wise sales report generated successfully',
+      data: {
+        report_date: date,
+        summary,
+        products: reportData
+      }
+    });
+
+  } catch (error) {
+    console.error('Day-wise sales report error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Stock reconciliation report
+router.get('/stock-reconciliation', [verifyToken], async (req, res) => {
+  try {
+    const { date, reconciliation_id } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
+    }
+
+    const reportDate = new Date(date);
+    reportDate.setHours(0, 0, 0, 0);
+
+    // Find reconciliation record
+    const filter = { date: reportDate };
+    if (reconciliation_id) {
+      filter.reconciliation_id = reconciliation_id;
+    }
+
+    const reconciliation = await StockReconciliation.findOne(filter)
+      .populate('reconciled_by', 'username')
+      .populate('approved_by', 'username')
+      .populate('reconciliation_items.product_id', 'name barcode cost_price');
+
+    if (!reconciliation) {
+      return res.status(404).json({ 
+        message: 'No reconciliation found for the specified date',
+        date: date
+      });
+    }
+
+    // Format reconciliation items
+    const reconciliationItems = reconciliation.reconciliation_items.map((item, index) => ({
+      si_no: index + 1,
+      product_name: item.product_id.name,
+      barcode: item.product_id.barcode,
+      system_stock: item.system_stock,
+      physical_stock: item.physical_stock,
+      variance: item.variance,
+      variance_value: item.variance_value,
+      cost_per_unit: item.cost_per_unit,
+      reason: item.reason,
+      reconciled_at: item.reconciled_at
+    }));
+
+    // Calculate summary
+    const summary = {
+      reconciliation_id: reconciliation.reconciliation_id,
+      reconciliation_date: reconciliation.date,
+      status: reconciliation.status,
+      total_products: reconciliation.total_products,
+      products_reconciled: reconciliation.products_reconciled,
+      total_variance: reconciliation.total_variance,
+      variance_value: reconciliation.variance_value,
+      reconciled_by: reconciliation.reconciled_by.username,
+      approved_by: reconciliation.approved_by?.username || null,
+      approved_at: reconciliation.approved_at,
+      notes: reconciliation.notes
+    };
+
+    res.json({
+      message: 'Stock reconciliation report generated successfully',
+      data: {
+        summary,
+        items: reconciliationItems
+      }
+    });
+
+  } catch (error) {
+    console.error('Stock reconciliation report error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

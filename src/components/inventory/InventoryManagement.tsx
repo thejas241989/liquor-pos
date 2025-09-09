@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, TrendingUp, AlertTriangle, DollarSign, BarChart3 } from 'lucide-react';
+import { Package, Plus, TrendingUp, AlertTriangle, DollarSign, BarChart3, FileText, RefreshCw } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
 import { apiService } from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
+import StockInward from './StockInward';
+import StockReconciliation from './StockReconciliation';
 
 interface Product {
   _id: string;
@@ -34,7 +36,7 @@ const InventoryManagement: React.FC = () => {
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'low-stock'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'low-stock' | 'stock-inward' | 'reconciliation'>('overview');
 
   const fetchInventoryData = async () => {
     try {
@@ -204,10 +206,32 @@ const InventoryManagement: React.FC = () => {
             >
               Low Stock ({lowStockProducts.length})
             </button>
+            <button
+              onClick={() => setActiveTab('stock-inward')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'stock-inward'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Plus className="w-4 h-4 inline mr-2" />
+              Stock Inward
+            </button>
+            <button
+              onClick={() => setActiveTab('reconciliation')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'reconciliation'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="w-4 h-4 inline mr-2" />
+              Reconciliation
+            </button>
           </nav>
         </div>
 
-        <div className="p-6">
+    <div className="p-6">
           {activeTab === 'overview' && (
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Inventory Overview</h3>
@@ -385,6 +409,14 @@ const InventoryManagement: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'stock-inward' && (
+            <StockInward />
+          )}
+
+          {activeTab === 'reconciliation' && (
+            <StockReconciliation />
           )}
         </div>
       </div>

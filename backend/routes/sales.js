@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
+const { Sale } = require('../models/Sale');
 
 const router = express.Router();
 
@@ -128,22 +129,40 @@ router.post('/', async (req, res) => {
 
     const total_amount = subtotal + total_tax - discount_amount;
 
-    // Create sale summary
+    // Create sale document with proper date and time
+    const saleDate = new Date();
     const saleData = {
       invoice_no,
-      total_amount,
+      biller_id: req.user?.id || new mongoose.Types.ObjectId(), // Use authenticated user or default
+      customer_name: customer_name || null,
+      customer_phone: customer_phone || null,
       subtotal,
       tax_amount: total_tax,
       discount_amount,
-      items_count: items.length,
-      sale_date: new Date(),
-      items: processed_items
+      total_amount,
+      payment_method,
+      payment_status: 'paid',
+      notes: notes || null,
+      sale_date: saleDate, // Explicitly set sale date and time
+      items: processed_items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        tax_percentage: 10, // 10% tax
+        tax_amount: item.tax_amount,
+        line_total: item.line_total
+      }))
     };
 
+    // Save sale to database
+    const savedSale = await Sale.create(saleData);
+
     console.log('Sale completed successfully:', {
+      sale_id: savedSale._id,
       invoice_no,
       total_amount,
       items_count: items.length,
+      sale_date: saleDate,
       soldItems: soldItems.map(item => `${item.quantity}x ${item.name}`)
     });
 
@@ -152,18 +171,22 @@ router.post('/', async (req, res) => {
       message: 'Sale completed successfully',
       data: {
         sale: {
-          id: saleData.invoice_no,
-          invoice_no,
-          total_amount,
-          items_count: items.length
+          id: savedSale._id,
+          invoice_no: savedSale.invoice_no,
+          total_amount: savedSale.total_amount,
+          sale_date: savedSale.sale_date,
+          items_count: savedSale.items.length,
+          biller_id: savedSale.biller_id,
+          customer_name: savedSale.customer_name,
+          payment_method: savedSale.payment_method
         },
         soldItems,
         summary: {
-          subtotal,
-          tax_amount: total_tax,
-          discount_amount,
-          total_amount,
-          items_count: items.length
+          subtotal: savedSale.subtotal,
+          tax_amount: savedSale.tax_amount,
+          discount_amount: savedSale.discount_amount,
+          total_amount: savedSale.total_amount,
+          items_count: savedSale.items.length
         }
       },
       soldItems // For backward compatibility with POS
@@ -179,13 +202,47 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get sales
+// Get sales with date filtering
 router.get('/', async (req, res) => {
   try {
+    const { start_date, end_date, page = 1, limit = 20 } = req.query;
+    
+    // Build date filter
+    const dateFilter = {};
+    if (start_date || end_date) {
+      dateFilter.sale_date = {};
+      if (start_date) {
+        dateFilter.sale_date.$gte = new Date(start_date);
+      }
+      if (end_date) {
+        dateFilter.sale_date.$lte = new Date(end_date);
+      }
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Fetch sales with pagination and date filtering
+    const sales = await Sale.find(dateFilter)
+      .populate('biller_id', 'username name')
+      .populate('items.product_id', 'name category_id')
+      .sort({ sale_date: -1, created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalCount = await Sale.countDocuments(dateFilter);
+
     res.json({
       success: true,
-      data: [],
-      message: 'Sales endpoint working'
+      data: sales,
+      pagination: {
+        current_page: parseInt(page),
+        total_pages: Math.ceil(totalCount / parseInt(limit)),
+        total_items: totalCount,
+        items_per_page: parseInt(limit)
+      },
+      message: 'Sales fetched successfully'
     });
   } catch (error) {
     console.error('Error fetching sales:', error);

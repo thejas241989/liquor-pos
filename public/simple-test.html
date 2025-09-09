@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-button {
+            background: #1976d2;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .test-button:hover {
+            background: #1565c0;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border: 1px solid #dee2e6;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        pre {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Simple API Test</h1>
+        
+        <p>This page tests the API directly without any React components or caching issues.</p>
+        
+        <button class="test-button" onclick="testAPI()">Test Day-wise Sales API</button>
+        
+        <div id="result" class="result" style="display: none;">
+            <h3>Result:</h3>
+            <div id="resultContent"></div>
+        </div>
+        
+        <div class="result">
+            <h3>What this test does:</h3>
+            <ul>
+                <li>Makes a direct fetch() call to the API</li>
+                <li>No React components involved</li>
+                <li>No caching issues</li>
+                <li>Shows the exact response</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            const contentDiv = document.getElementById('resultContent');
+            
+            resultDiv.style.display = 'block';
+            contentDiv.innerHTML = '<p>Testing API...</p>';
+            
+            try {
+                console.log('Testing API...');
+                
+                const url = 'http://localhost:5002/api/reports/public-day-wise-sales?date=2025-09-09';
+                console.log('URL:', url);
+                
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok && data.success) {
+                    contentDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ SUCCESS!</h4>
+                            <p>Status: ${response.status}</p>
+                            <p>Products found: ${data.data.products.length}</p>
+                            <p>Total sales: ₹${data.data.summary.total_sales_amount}</p>
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    contentDiv.innerHTML = `
+                        <div class="error">
+                            <h4>❌ ERROR!</h4>
+                            <p>Status: ${response.status}</p>
+                            <p>Message: ${data.message || 'Unknown error'}</p>
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                contentDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ EXCEPTION!</h4>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Auto-test on page load
+        window.onload = function() {
+            console.log('Page loaded, starting test...');
+            setTimeout(testAPI, 1000);
+        };
+    </script>
+</body>
+</html>

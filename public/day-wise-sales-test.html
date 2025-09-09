@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day-wise Sales Report Test - Liquor POS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .summary {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .summary h2 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .summary-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .summary-item .label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1976d2;
+        }
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .products-table th,
+        .products-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .products-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+        .products-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .currency {
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .refresh-btn {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .refresh-btn:hover {
+            background: #1565c0;
+        }
+        .date-input {
+            margin-bottom: 20px;
+        }
+        .date-input input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Day-wise Sales Report Test</h1>
+        
+        <div class="date-input">
+            <label for="reportDate">Report Date: </label>
+            <input type="date" id="reportDate" value="2025-09-09">
+            <button class="refresh-btn" onclick="loadDayWiseSalesData()">🔄 Load Report</button>
+        </div>
+        
+        <div id="loading" class="loading">
+            Loading day-wise sales data...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="content" style="display: none;">
+            <div class="summary">
+                <h2>📈 Day-wise Summary</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="label">Total Products</div>
+                        <div class="value" id="totalProducts">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Opening Stock</div>
+                        <div class="value" id="totalOpeningStock">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Sold Quantity</div>
+                        <div class="value" id="totalSoldQuantity">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Closing Stock</div>
+                        <div class="value" id="totalClosingStock">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Total Sales Amount</div>
+                        <div class="value currency" id="totalSalesAmount">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Stock Value</div>
+                        <div class="value currency" id="totalStockValue">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <h2>🛍️ Product-wise Details</h2>
+            <table class="products-table">
+                <thead>
+                    <tr>
+                        <th>SI No</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Opening Stock</th>
+                        <th>Sold Quantity</th>
+                        <th>Closing Stock</th>
+                        <th>Sales Amount</th>
+                        <th>Stock Value</th>
+                    </tr>
+                </thead>
+                <tbody id="productsTable">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadDayWiseSalesData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const content = document.getElementById('content');
+            const reportDate = document.getElementById('reportDate').value;
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            content.style.display = 'none';
+            
+            try {
+                const response = await fetch(`http://localhost:5002/api/reports/public-day-wise-sales?date=${reportDate}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayDayWiseSalesData(data.data);
+                } else {
+                    throw new Error(data.message || 'Failed to load day-wise sales data');
+                }
+            } catch (err) {
+                error.textContent = 'Error loading day-wise sales data: ' + err.message;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displayDayWiseSalesData(data) {
+            // Update summary
+            document.getElementById('totalProducts').textContent = data.summary.total_products;
+            document.getElementById('totalOpeningStock').textContent = data.summary.total_opening_stock;
+            document.getElementById('totalSoldQuantity').textContent = data.summary.total_sold_quantity;
+            document.getElementById('totalClosingStock').textContent = data.summary.total_closing_stock;
+            document.getElementById('totalSalesAmount').textContent = '₹' + data.summary.total_sales_amount.toLocaleString();
+            document.getElementById('totalStockValue').textContent = '₹' + data.summary.total_stock_value.toLocaleString();
+            
+            // Update products table
+            const tbody = document.getElementById('productsTable');
+            tbody.innerHTML = '';
+            
+            data.products.forEach(product => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${product.si_no}</td>
+                    <td>${product.product_name}</td>
+                    <td>${product.category_name}</td>
+                    <td>${product.opening_stock}</td>
+                    <td style="color: ${product.sold_quantity > 0 ? '#2e7d32' : '#666'}">${product.sold_quantity}</td>
+                    <td>${product.closing_stock}</td>
+                    <td style="color: ${product.total_sales_amount > 0 ? '#2e7d32' : '#666'}">₹${product.total_sales_amount.toLocaleString()}</td>
+                    <td>₹${product.stock_value.toLocaleString()}</td>
+                `;
+            });
+            
+            document.getElementById('content').style.display = 'block';
+        }
+        
+        // Load data on page load
+        loadDayWiseSalesData();
+    </script>
+</body>
+</html>
+
