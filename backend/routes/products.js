@@ -282,7 +282,7 @@ router.put('/test', async (req, res) => {
 router.get('/', [
   verifyToken,
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000'),
   query('category_id').optional().isMongoId().withMessage('Category must be a valid MongoDB ID'),
   query('search').optional().trim()
 ], async (req, res) => {

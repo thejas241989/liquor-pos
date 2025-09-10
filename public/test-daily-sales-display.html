@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Sales Report Data Display Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        .text-right { text-align: right; }
+        .currency { font-family: monospace; }
+        .category-header { background-color: #e9ecef; font-weight: bold; }
+        .totals-row { background-color: #f8f9fa; font-weight: bold; }
+        .loading { color: #007bff; }
+        .error-text { color: #dc3545; }
+        .success-text { color: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Daily Sales Report - Data Display Test</h1>
+        
+        <div class="test-section info">
+            <h3>🔍 Testing Data Display in All Columns</h3>
+            <p>This page tests the Daily Sales Report to verify that all columns display the correct data from the API response.</p>
+        </div>
+
+        <div class="test-section">
+            <h3>1. Test Single Date Report</h3>
+            <div>
+                <label>Date: <input type="date" id="singleDate" value="2025-09-10"></label>
+                <button onclick="testSingleDate()">Test Single Date</button>
+            </div>
+            <div id="singleDateResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Test Date Range Report</h3>
+            <div>
+                <label>Start: <input type="date" id="startDate" value="2025-09-01"></label>
+                <label>End: <input type="date" id="endDate" value="2025-09-10"></label>
+                <button onclick="testDateRange()">Test Date Range</button>
+            </div>
+            <div id="dateRangeResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. Column Data Verification</h3>
+            <button onclick="verifyColumns()">Verify All Columns</button>
+            <div id="columnVerification"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let lastReportData = null;
+
+        async function login() {
+            if (authToken) return authToken;
+            
+            const response = await fetch('http://localhost:5002/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: 'admin', password: 'admin123' })
+            });
+
+            const data = await response.json();
+            authToken = data.token;
+            localStorage.setItem('token', data.token);
+            return authToken;
+        }
+
+        async function testSingleDate() {
+            const resultDiv = document.getElementById('singleDateResult');
+            const date = document.getElementById('singleDate').value;
+            
+            resultDiv.innerHTML = '<p class="loading">🔄 Testing single date report...</p>';
+
+            try {
+                await login();
+                const url = `http://localhost:5002/api/reports/daily-sales?date=${date}`;
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                lastReportData = data.data;
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ Single Date Report Success</h4>
+                            <p><strong>Date:</strong> ${date}</p>
+                            <p><strong>Rows:</strong> ${data.data.rows.length}</p>
+                            <p><strong>Total Quantity:</strong> ${data.data.summary.total_quantity}</p>
+                            <p><strong>Total Amount:</strong> ₹${data.data.summary.total_amount.toLocaleString()}</p>
+                            ${renderTable(data.data.rows)}
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.message || 'API returned success: false');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Single Date Test Failed</h4>
+                        <p class="error-text">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function testDateRange() {
+            const resultDiv = document.getElementById('dateRangeResult');
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            resultDiv.innerHTML = '<p class="loading">🔄 Testing date range report...</p>';
+
+            try {
+                await login();
+                const url = `http://localhost:5002/api/reports/daily-sales?start_date=${startDate}&end_date=${endDate}`;
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                lastReportData = data.data;
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ Date Range Report Success</h4>
+                            <p><strong>Range:</strong> ${startDate} to ${endDate}</p>
+                            <p><strong>Rows:</strong> ${data.data.rows.length}</p>
+                            <p><strong>Total Quantity:</strong> ${data.data.summary.total_quantity}</p>
+                            <p><strong>Total Amount:</strong> ₹${data.data.summary.total_amount.toLocaleString()}</p>
+                            ${renderTable(data.data.rows)}
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.message || 'API returned success: false');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Date Range Test Failed</h4>
+                        <p class="error-text">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderTable(rows) {
+            if (!rows || rows.length === 0) {
+                return '<p>No data to display</p>';
+            }
+
+            let html = '<table><thead><tr>';
+            html += '<th>SI No</th>';
+            html += '<th>Category</th>';
+            html += '<th>Product</th>';
+            html += '<th class="text-right">Unit Price</th>';
+            html += '<th class="text-right">Quantity</th>';
+            html += '<th class="text-right">Total Amount</th>';
+            html += '</tr></thead><tbody>';
+
+            let currentCategory = '';
+            let totalQuantity = 0;
+            let totalAmount = 0;
+
+            rows.forEach((row, index) => {
+                const isFirstInCategory = row.category !== currentCategory;
+                if (isFirstInCategory) currentCategory = row.category;
+
+                html += '<tr>';
+                html += `<td>${index + 1}</td>`;
+                html += `<td class="${isFirstInCategory ? 'category-header' : ''}">${isFirstInCategory ? row.category : ''}</td>`;
+                html += `<td>${row.product}</td>`;
+                html += `<td class="text-right currency">₹${row.unitPrice.toLocaleString()}</td>`;
+                html += `<td class="text-right">${row.quantity}</td>`;
+                html += `<td class="text-right currency">₹${row.totalAmount.toLocaleString()}</td>`;
+                html += '</tr>';
+
+                totalQuantity += row.quantity;
+                totalAmount += row.totalAmount;
+            });
+
+            html += '</tbody><tfoot>';
+            html += '<tr class="totals-row">';
+            html += '<td colspan="4"><strong>Totals</strong></td>';
+            html += `<td class="text-right"><strong>${totalQuantity}</strong></td>`;
+            html += `<td class="text-right"><strong>₹${totalAmount.toLocaleString()}</strong></td>`;
+            html += '</tr></tfoot></table>';
+
+            return html;
+        }
+
+        function verifyColumns() {
+            const resultDiv = document.getElementById('columnVerification');
+            
+            if (!lastReportData || !lastReportData.rows || lastReportData.rows.length === 0) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ No Data Available</h4>
+                        <p>Please run a report test first to get data for verification.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const rows = lastReportData.rows;
+            const issues = [];
+            const columnChecks = {
+                'Category': rows.every(r => r.category && r.category.trim() !== ''),
+                'Product': rows.every(r => r.product && r.product.trim() !== ''),
+                'Unit Price': rows.every(r => typeof r.unitPrice === 'number' && r.unitPrice >= 0),
+                'Quantity': rows.every(r => typeof r.quantity === 'number' && r.quantity > 0),
+                'Total Amount': rows.every(r => typeof r.totalAmount === 'number' && r.totalAmount >= 0)
+            };
+
+            // Check for calculation accuracy
+            const calculationIssues = rows.filter(r => {
+                const expectedTotal = r.unitPrice * r.quantity;
+                const actualTotal = r.totalAmount;
+                return Math.abs(expectedTotal - actualTotal) > 0.01; // Allow for small rounding differences
+            });
+
+            if (calculationIssues.length > 0) {
+                issues.push(`Calculation Issues: ${calculationIssues.length} rows have incorrect total amounts`);
+            }
+
+            // Check for missing or invalid data
+            Object.entries(columnChecks).forEach(([column, isValid]) => {
+                if (!isValid) {
+                    issues.push(`Column "${column}" has missing or invalid data`);
+                }
+            });
+
+            // Check summary totals
+            const calculatedTotalQty = rows.reduce((sum, r) => sum + r.quantity, 0);
+            const calculatedTotalAmt = rows.reduce((sum, r) => sum + r.totalAmount, 0);
+            
+            if (calculatedTotalQty !== lastReportData.summary.total_quantity) {
+                issues.push(`Summary total quantity mismatch: calculated ${calculatedTotalQty}, API returned ${lastReportData.summary.total_quantity}`);
+            }
+            
+            if (calculatedTotalAmt !== lastReportData.summary.total_amount) {
+                issues.push(`Summary total amount mismatch: calculated ${calculatedTotalAmt}, API returned ${lastReportData.summary.total_amount}`);
+            }
+
+            if (issues.length === 0) {
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ All Columns Verified Successfully</h4>
+                        <p><strong>Rows Checked:</strong> ${rows.length}</p>
+                        <p><strong>Categories:</strong> ${[...new Set(rows.map(r => r.category))].length}</p>
+                        <p><strong>Total Quantity:</strong> ${calculatedTotalQty}</p>
+                        <p><strong>Total Amount:</strong> ₹${calculatedTotalAmt.toLocaleString()}</p>
+                        <p class="success-text">All data columns are displaying correctly!</p>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Column Verification Issues Found</h4>
+                        <ul>
+                            ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                        </ul>
+                        <details>
+                            <summary>Raw Data Sample</summary>
+                            <pre>${JSON.stringify(rows.slice(0, 3), null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-login on page load
+        window.addEventListener('load', () => {
+            login().then(() => {
+                console.log('Auto-login successful');
+            }).catch(err => {
+                console.error('Auto-login failed:', err);
+            });
+        });
+    </script>
+</body>
+</html>

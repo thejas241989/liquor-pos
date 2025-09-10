@@ -63,7 +63,7 @@ const StockInward: React.FC = () => {
   const [history, setHistory] = useState<StockInwardRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  // const [totalPages, setTotalPages] = useState(1); // Removed unused variable
   const [editingRecord, setEditingRecord] = useState<StockInwardRecord | null>(null);
   const [editForm, setEditForm] = useState({
     quantity: 0,
@@ -99,7 +99,7 @@ const StockInward: React.FC = () => {
       });
       if (response.message) {
         setHistory(response.data);
-        setTotalPages(response.pagination?.total_pages || 1);
+        // setTotalPages(response.pagination?.total_pages || 1); // Removed unused variable
       }
     } catch (error) {
       console.error('Error fetching history:', error);
@@ -290,7 +290,7 @@ const StockInward: React.FC = () => {
       console.log('📦 Stock inward response:', response);
 
       if (response.message) {
-        const { successful, failed, summary } = response.data;
+        const { failed, summary } = response.data;
         
         if (summary.successful_count > 0) {
           setSuccess(`Stock inward recorded successfully! ${summary.successful_count} items processed.`);

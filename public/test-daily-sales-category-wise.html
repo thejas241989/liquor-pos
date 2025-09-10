@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Sales Report - Category-wise Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Daily Sales Report - Category-wise Test</h1>
+    
+    <div class="test-section">
+        <h2>🔐 Step 1: Login</h2>
+        <button onclick="login()">Login as Admin</button>
+        <div id="login-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Step 2: Test Category-wise Aggregation</h2>
+        <button onclick="testCategoryWise()">Test Category-wise Data (2025-09-10)</button>
+        <button onclick="testDateRange()">Test Date Range (2025-09-08 to 2025-09-10)</button>
+        <div id="category-test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Step 3: Display Aggregated Results</h2>
+        <div id="aggregated-results"></div>
+    </div>
+
+    <script>
+        let token = '';
+
+        async function login() {
+            try {
+                const response = await fetch('http://localhost:5002/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    token = data.token;
+                    document.getElementById('login-result').innerHTML = 
+                        '<div class="success">✅ Login successful! Token received.</div>';
+                } else {
+                    document.getElementById('login-result').innerHTML = 
+                        '<div class="error">❌ Login failed: ' + data.message + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('login-result').innerHTML = 
+                    '<div class="error">❌ Login error: ' + error.message + '</div>';
+            }
+        }
+
+        function aggregateSalesData(salesData) {
+            const productMap = new Map();
+            let totalQuantity = 0;
+            let totalAmount = 0;
+
+            salesData.forEach((sale) => {
+                sale.items.forEach((item) => {
+                    const product = item.product_id;
+                    const category = product?.category_id;
+                    const categoryName = category?.name || 'Unknown';
+                    const productName = product?.name || 'Unknown Product';
+                    const unitPrice = product?.price || 0;
+                    const quantity = item.quantity || 0;
+                    const lineTotal = item.line_total || 0;
+
+                    const key = `${categoryName}|${productName}`;
+
+                    if (productMap.has(key)) {
+                        const existing = productMap.get(key);
+                        existing.quantity += quantity;
+                        existing.totalAmount += lineTotal;
+                    } else {
+                        productMap.set(key, {
+                            category: categoryName,
+                            product: productName,
+                            unitPrice,
+                            quantity,
+                            totalAmount: lineTotal
+                        });
+                    }
+
+                    totalQuantity += quantity;
+                    totalAmount += lineTotal;
+                });
+            });
+
+            const aggregatedRows = Array.from(productMap.values()).sort((a, b) => {
+                if (a.category !== b.category) {
+                    return a.category.localeCompare(b.category);
+                }
+                return a.product.localeCompare(b.product);
+            });
+
+            const uniqueCategories = new Set(aggregatedRows.map(row => row.category)).size;
+
+            return {
+                rows: aggregatedRows,
+                summary: {
+                    total_quantity: totalQuantity,
+                    total_amount: totalAmount,
+                    total_products: aggregatedRows.length,
+                    total_categories: uniqueCategories
+                }
+            };
+        }
+
+        async function testCategoryWise() {
+            if (!token) {
+                document.getElementById('category-test-result').innerHTML = 
+                    '<div class="error">❌ Please login first!</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5002/api/sales?date=2025-09-10', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    const aggregated = aggregateSalesData(data.data);
+                    
+                    document.getElementById('category-test-result').innerHTML = 
+                        `<div class="success">✅ Category-wise Test: Found ${data.data.length} sales, aggregated to ${aggregated.rows.length} products</div>
+                         <div class="info">Categories: ${aggregated.summary.total_categories} | Products: ${aggregated.summary.total_products} | Total Qty: ${aggregated.summary.total_quantity} | Total Amount: ₹${aggregated.summary.total_amount}</div>`;
+                    
+                    displayAggregatedResults(aggregated);
+                } else {
+                    document.getElementById('category-test-result').innerHTML = 
+                        '<div class="error">❌ Category-wise test failed: ' + data.message + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('category-test-result').innerHTML = 
+                    '<div class="error">❌ Category-wise test error: ' + error.message + '</div>';
+            }
+        }
+
+        async function testDateRange() {
+            if (!token) {
+                document.getElementById('category-test-result').innerHTML = 
+                    '<div class="error">❌ Please login first!</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5002/api/sales?start_date=2025-09-08&end_date=2025-09-10', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    const aggregated = aggregateSalesData(data.data);
+                    
+                    document.getElementById('category-test-result').innerHTML = 
+                        `<div class="success">✅ Date Range Test: Found ${data.data.length} sales, aggregated to ${aggregated.rows.length} products</div>
+                         <div class="info">Categories: ${aggregated.summary.total_categories} | Products: ${aggregated.summary.total_products} | Total Qty: ${aggregated.summary.total_quantity} | Total Amount: ₹${aggregated.summary.total_amount}</div>`;
+                    
+                    displayAggregatedResults(aggregated);
+                } else {
+                    document.getElementById('category-test-result').innerHTML = 
+                        '<div class="error">❌ Date range test failed: ' + data.message + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('category-test-result').innerHTML = 
+                    '<div class="error">❌ Date range test error: ' + error.message + '</div>';
+            }
+        }
+
+        function displayAggregatedResults(aggregated) {
+            let html = '<h3>📊 Aggregated Results (Category-wise)</h3>';
+            html += '<table>';
+            html += '<thead><tr><th>SI No</th><th>Category</th><th>Product</th><th>Unit Price</th><th>Quantity</th><th>Total Amount</th></tr></thead>';
+            html += '<tbody>';
+            
+            aggregated.rows.forEach((row, index) => {
+                html += `<tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${row.category}</strong></td>
+                    <td>${row.product}</td>
+                    <td>₹${row.unitPrice}</td>
+                    <td>${row.quantity}</td>
+                    <td><strong>₹${row.totalAmount}</strong></td>
+                </tr>`;
+            });
+            
+            html += '</tbody>';
+            html += '<tfoot>';
+            html += `<tr style="background-color: #f2f2f2; font-weight: bold;">
+                <td colspan="3">Totals</td>
+                <td></td>
+                <td>${aggregated.summary.total_quantity}</td>
+                <td>₹${aggregated.summary.total_amount}</td>
+            </tr>`;
+            html += '</tfoot>';
+            html += '</table>';
+            
+            document.getElementById('aggregated-results').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

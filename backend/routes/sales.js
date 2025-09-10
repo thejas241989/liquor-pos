@@ -205,11 +205,23 @@ router.post('/', async (req, res) => {
 // Get sales with date filtering
 router.get('/', async (req, res) => {
   try {
-    const { start_date, end_date, page = 1, limit = 20 } = req.query;
+    const { date, start_date, end_date, page = 1, limit = 20 } = req.query;
     
     // Build date filter
     const dateFilter = {};
-    if (start_date || end_date) {
+    if (date) {
+      // Single date filter - get sales for that specific date
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      dateFilter.sale_date = {
+        $gte: startOfDay,
+        $lte: endOfDay
+      };
+    } else if (start_date || end_date) {
+      // Date range filter
       dateFilter.sale_date = {};
       if (start_date) {
         dateFilter.sale_date.$gte = new Date(start_date);
@@ -225,7 +237,14 @@ router.get('/', async (req, res) => {
     // Fetch sales with pagination and date filtering
     const sales = await Sale.find(dateFilter)
       .populate('biller_id', 'username name')
-      .populate('items.product_id', 'name category_id')
+      .populate({
+        path: 'items.product_id',
+        select: 'name category_id',
+        populate: {
+          path: 'category_id',
+          select: 'name'
+        }
+      })
       .sort({ sale_date: -1, created_at: -1 })
       .skip(skip)
       .limit(parseInt(limit));

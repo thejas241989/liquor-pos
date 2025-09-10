@@ -19,7 +19,7 @@ const ReportDetail: React.FC = () => {
 
   const fetchReport = useCallback(async () => {
     // Skip API calls for reports that handle their own data fetching
-    if (reportId === 'day-wise-sales' || reportId === 'stock-reconciliation') {
+    if (reportId === 'day-wise-sales' || reportId === 'stock-reconciliation' || reportId === 'daily-sales') {
       setLoading(false);
       setError(null);
       setData(null);
@@ -62,11 +62,37 @@ const ReportDetail: React.FC = () => {
     }
   }, [reportId, fetchReport]);
 
+  const getReportTitle = (reportId: string) => {
+    const titles: Record<string, string> = {
+      'day-wise-sales': 'Day-Wise Master Report',
+      'daily-sales': 'Daily Sales Report',
+      'top-products': 'Top Products Report',
+      'inventory': 'Inventory Report',
+      'stock-reconciliation': 'Stock Reconciliation Report',
+      'current-stock': 'Current Stock Report',
+      'biller-performance': 'Biller Performance Report'
+    };
+    return titles[reportId] || `Report: ${reportId}`;
+  };
+
+  const getReportDescription = (reportId: string) => {
+    const descriptions: Record<string, string> = {
+      'day-wise-sales': 'Comprehensive daily stock movements and sales analysis',
+      'daily-sales': 'Daily sales summary and analytics',
+      'top-products': 'Best performing products analysis',
+      'inventory': 'Current inventory levels and values',
+      'stock-reconciliation': 'Physical vs system stock comparison',
+      'current-stock': 'Current stock levels and values',
+      'biller-performance': 'Staff performance metrics and analysis'
+    };
+    return descriptions[reportId] || `View generated data for the ${reportId} report`;
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <PageHeader
-        title={`Report: ${reportId}`}
-        description={`View generated data for the ${reportId} report`}
+        title={getReportTitle(reportId || '')}
+        description={getReportDescription(reportId || '')}
       />
 
       <div className="mt-6 bg-white rounded-lg shadow p-6">

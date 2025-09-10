@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Download, TrendingUp, Package, DollarSign, BarChart3, Calendar } from 'lucide-react';
+import { FileText, Download, TrendingUp, Package, DollarSign, BarChart3 } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
 import { useNavigate } from 'react-router-dom';
@@ -116,7 +116,7 @@ const ReportsPage: React.FC = () => {
               <div className="text-sm text-gray-600">Complete stock levels with values</div>
             </button>
             <button onClick={() => navigate('/reports/day-wise-sales')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-              <div className="font-medium text-gray-900">Day-Wise Sales Report</div>
+              <div className="font-medium text-gray-900">Day-Wise Master Report</div>
               <div className="text-sm text-gray-600">Daily stock movements and sales</div>
             </button>
             <button onClick={() => navigate('/reports/stock-reconciliation')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">

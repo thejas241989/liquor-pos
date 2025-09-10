@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, Search, Filter, Package } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ShoppingCart, Search, BarChart3, Shield, Package, FileText, Settings } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { apiService } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Product {
   id: string;
@@ -24,43 +26,104 @@ interface CartItem {
   subtotal: number;
 }
 
-interface Category {
-  id: string;
-  name: string;
-  description: string;
-}
+// interface Category {
+//   id: string;
+//   name: string;
+//   description: string;
+// }
 
 const POSScreen: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  // const [categories, setCategories] = useState<Category[]>([]); // Removed unused variable
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const TAX_RATE = 0.1; // 10% tax
 
-  const filterProducts = useCallback(async () => {
-    console.log('Filtering products with search term:', searchTerm, 'category:', selectedCategory);
-    
-    if (!searchTerm && !selectedCategory) {
-      // If no search term or category, show all products
-      console.log('No search criteria, showing all products:', products.length);
-      setFilteredProducts(products);
+  const getHeaderActions = () => {
+    const navigationItems = [
+      {
+        key: 'dashboard',
+        icon: BarChart3,
+        label: 'Dashboard',
+        route: user?.role === 'admin' ? '/admin' : `/${user?.role}`,
+        visible: true,
+        color: 'bg-blue-600 hover:bg-blue-700'
+      },
+      {
+        key: 'inventory',
+        icon: Package,
+        label: 'Inventory',
+        route: '/inventory',
+        visible: ['admin', 'manager', 'stock_reconciler'].includes(user?.role || ''),
+        color: 'bg-green-600 hover:bg-green-700'
+      },
+      {
+        key: 'reports',
+        icon: FileText,
+        label: 'Reports',
+        route: '/reports',
+        visible: ['admin', 'manager'].includes(user?.role || ''),
+        color: 'bg-orange-600 hover:bg-orange-700'
+      },
+      {
+        key: 'users',
+        icon: Shield,
+        label: 'Users',
+        route: '/users',
+        visible: user?.role === 'admin',
+        color: 'bg-red-600 hover:bg-red-700'
+      },
+      {
+        key: 'products',
+        icon: Settings,
+        label: 'Products',
+        route: '/products',
+        visible: ['admin', 'manager'].includes(user?.role || ''),
+        color: 'bg-indigo-600 hover:bg-indigo-700'
+      }
+    ];
+
+    return (
+      <>
+        {navigationItems.filter(item => item.visible).map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.key}
+              onClick={() => navigate(item.route)}
+              className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg transition-colors ${item.color}`}
+            >
+              <Icon className="w-4 h-4" />
+              {item.label}
+            </button>
+          );
+        })}
+      </>
+    );
+  };
+
+  const searchProducts = useCallback(async (term: string) => {
+    if (!term.trim()) {
+      setSearchResults([]);
       return;
     }
 
+    setIsSearching(true);
     try {
-      // Use backend search when there's a search term or category
-      const token = localStorage.getItem('token');
-      let searchUrl = 'http://localhost:5002/api/products/test?limit=100';
+      // const token = localStorage.getItem('token');
+      let searchUrl = 'http://localhost:5002/api/products/test?limit=50';
       
-      if (searchTerm) {
-        searchUrl += `&search=${encodeURIComponent(searchTerm)}`;
+      if (term) {
+        searchUrl += `&search=${encodeURIComponent(term)}`;
       }
-      
-      console.log('Making API search request to:', searchUrl);
       
       const response = await fetch(searchUrl, {
         headers: {
@@ -71,10 +134,9 @@ const POSScreen: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         let searchResults = data.data || [];
-        console.log('Backend search results:', searchResults.length, 'products');
         
         // Map products to correct structure
-        searchResults = searchResults.map((product: any) => ({
+        const mappedResults = searchResults.map((product: any) => ({
           ...product,
           id: String(product._id || product.id),
           category: product.category_name || product.category || 'Unknown',
@@ -83,62 +145,33 @@ const POSScreen: React.FC = () => {
           barcode: product.barcode || ''
         }));
 
-        // Apply category filter locally if needed
-        if (selectedCategory) {
-          const beforeFilter = searchResults.length;
-          searchResults = searchResults.filter((product: any) =>
-            product.category === selectedCategory || product.category_name === selectedCategory
-          );
-          console.log('Category filter applied:', beforeFilter, '->', searchResults.length);
-        }
-
-        console.log('Final filtered results:', searchResults.length, 'products');
-        setFilteredProducts(searchResults);
+        setSearchResults(mappedResults);
+        setSelectedIndex(0); // Select first result by default
+        console.log('🔍 Search results set:', mappedResults.length, 'First result selected');
       } else {
-        console.log('Backend search failed, falling back to local filtering');
-        // Fallback to local filtering if backend search fails
-        let filtered = products;
-        
-        if (searchTerm) {
-          filtered = filtered.filter(product =>
-            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (product.barcode && product.barcode.includes(searchTerm)) ||
-            ((product as any).brand && (product as any).brand.toLowerCase().includes(searchTerm.toLowerCase()))
-          );
-        }
-        
-        if (selectedCategory) {
-          filtered = filtered.filter(product =>
-            product.category === selectedCategory || product.category_name === selectedCategory
-          );
-        }
-        
-        console.log('Local filter results:', filtered.length, 'products');
-        setFilteredProducts(filtered);
+        // Fallback to local search
+        const filtered = products.filter(product =>
+          product.name.toLowerCase().includes(term.toLowerCase()) ||
+          (product.barcode && product.barcode.includes(term)) ||
+          ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+        );
+        setSearchResults(filtered);
+        setSelectedIndex(0); // Select first result by default
+        console.log('🔍 Local search results set:', filtered.length, 'First result selected');
       }
     } catch (error) {
       console.error('Search error:', error);
-      // Fallback to local filtering
-      let filtered = products;
-      
-      if (searchTerm) {
-        filtered = filtered.filter(product =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (product.barcode && product.barcode.includes(searchTerm)) ||
-          ((product as any).brand && (product as any).brand.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      }
-      
-      if (selectedCategory) {
-        filtered = filtered.filter(product =>
-          product.category === selectedCategory || product.category_name === selectedCategory
-        );
-      }
-      
-      console.log('Fallback filter results:', filtered.length, 'products');
-      setFilteredProducts(filtered);
+      // Fallback to local search
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(term.toLowerCase()) ||
+        (product.barcode && product.barcode.includes(term)) ||
+        ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+      );
+      setSearchResults(filtered);
+    } finally {
+      setIsSearching(false);
     }
-  }, [products, searchTerm, selectedCategory]);
+  }, [products]);
 
   useEffect(() => {
     fetchData();
@@ -147,11 +180,33 @@ const POSScreen: React.FC = () => {
   useEffect(() => {
     // Debounce search to avoid too many API calls
     const timeoutId = setTimeout(() => {
-      filterProducts();
-    }, 300); // Wait 300ms after user stops typing
+      searchProducts(searchTerm);
+    }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [filterProducts]);
+  }, [searchTerm, searchProducts]);
+
+  // Ensure search input stays focused
+  useEffect(() => {
+    const handleClick = () => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    };
+
+    // Focus input when component mounts or when search results change
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+
+    // Add click listener to refocus input
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [searchResults]);
+
 
   const fetchData = async () => {
     try {
@@ -231,7 +286,7 @@ const POSScreen: React.FC = () => {
               }
             }
             
-            setCategories(categoriesList);
+            // setCategories(categoriesList); // Removed unused categories
             console.log('Categories loaded:', categoriesList.length);
           } catch (categoryError) {
             console.warn('Failed to fetch categories:', categoryError);
@@ -239,12 +294,11 @@ const POSScreen: React.FC = () => {
             const uniqueCategories = Array.from(new Set(mappedProducts.map((p: any) => p.category)))
               .filter(Boolean)
               .map((name, index) => ({ id: String(index + 1), name: String(name), description: '' }));
-            setCategories(uniqueCategories);
+            // setCategories(uniqueCategories); // Removed unused categories
             console.log('Using categories from products:', uniqueCategories);
           }
           
           setProducts(mappedProducts);
-          setFilteredProducts(mappedProducts);
           setLoading(false);
           return;
         }
@@ -308,13 +362,11 @@ const POSScreen: React.FC = () => {
             }
             
             setProducts(mappedProducts);
-            setCategories(categoriesList);
-            setFilteredProducts(mappedProducts);
+            // setCategories(categoriesList); // Removed unused categories
             return;
           } catch (categoryError) {
             console.warn('Failed to fetch categories:', categoryError);
             setProducts(mappedProducts);
-            setFilteredProducts(mappedProducts);
             return;
           }
         }
@@ -371,13 +423,62 @@ const POSScreen: React.FC = () => {
           : [];
         
         setProducts(productsList);
-        setCategories(categoriesList);
-        setFilteredProducts(productsList);
+        // setCategories(categoriesList); // Removed unused categories
       }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const selectProduct = (product: Product) => {
+    addToCart(product);
+    setSearchTerm(''); // Clear search after selection
+    setSearchResults([]); // Clear search results
+    setSelectedIndex(-1); // Reset selection
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    console.log('🔑 Key pressed:', e.key, 'Search results:', searchResults.length, 'Selected index:', selectedIndex);
+    
+    switch (e.key) {
+      case 'Enter':
+        e.preventDefault();
+        console.log('⏎ Enter pressed - selecting product at index:', selectedIndex);
+        if (searchResults.length > 0 && selectedIndex >= 0 && selectedIndex < searchResults.length) {
+          selectProduct(searchResults[selectedIndex]);
+        }
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        console.log('⬇️ Arrow down pressed');
+        if (searchResults.length > 0) {
+          setSelectedIndex(prev => {
+            const newIndex = prev < searchResults.length - 1 ? prev + 1 : 0;
+            console.log('⬇️ New selected index:', newIndex);
+            return newIndex;
+          });
+        }
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        console.log('⬆️ Arrow up pressed');
+        if (searchResults.length > 0) {
+          setSelectedIndex(prev => {
+            const newIndex = prev > 0 ? prev - 1 : searchResults.length - 1;
+            console.log('⬆️ New selected index:', newIndex);
+            return newIndex;
+          });
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        console.log('🚫 Escape pressed - clearing search');
+        setSearchTerm('');
+        setSearchResults([]);
+        setSelectedIndex(-1);
+        break;
     }
   };
 
@@ -561,35 +662,6 @@ const POSScreen: React.FC = () => {
 
   const { subtotal, tax, total } = getCartTotals();
 
-  const getHeaderActions = () => (
-    <>
-      <button 
-        onClick={() => {
-          // Trigger initialization of products from ProductManagement
-          window.dispatchEvent(new CustomEvent('initializeProducts'));
-          // Refresh the data after a short delay
-          setTimeout(() => {
-            fetchData();
-          }, 1000);
-        }}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-      >
-        <Package className="w-4 h-4" />
-        Initialize Products
-      </button>
-      <button 
-        onClick={fetchData}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-      >
-        <Filter className="w-4 h-4" />
-        Refresh
-      </button>
-      <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-        <Package className="w-4 h-4" />
-        Inventory
-      </button>
-    </>
-  );
 
   if (loading) {
     return (
@@ -615,110 +687,98 @@ const POSScreen: React.FC = () => {
         actions={getHeaderActions()}
       />
 
-      {/* Debug Info (can remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm">
-          <strong>Debug:</strong> Products: {products.length}, Filtered: {filteredProducts.length}, Categories: {categories.length}
-          {products.length === 0 && (
-            <span className="text-red-600 ml-2">- No products loaded. Try "Initialize Products" button.</span>
-          )}
-        </div>
-      )}
+      {/* Debug info removed as requested */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Product Search and Selection */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Product Search */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-sm">
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Search className="w-5 h-5 text-blue-600" />
                 Product Search
               </h3>
-              <div className="flex gap-4 mb-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search products by name, barcode, or brand..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      console.log('Search term changed:', e.target.value);
-                      setSearchTerm(e.target.value);
-                    }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="text-sm text-gray-600 mb-2">
-                Found {filteredProducts.length} products
-              </div>
-            </div>
-            
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="w-5 h-5 text-green-600" />
-                Products ({filteredProducts.length} of {products.length})
-              </h3>
-            {products.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                <p className="text-lg font-medium">No products loaded</p>
-                <p className="text-sm mb-4">Click "Initialize Products" to load the product catalog</p>
-                <button 
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('initializeProducts'));
-                    setTimeout(() => fetchData(), 1000);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Initialize Products
-                </button>
-              </div>
-            ) : filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => addToCart(product)}
-                  >
-                    <div className="font-medium text-gray-900 mb-1">{product.name}</div>
-                    <div className="text-sm text-gray-600 mb-1">{product.volume} • {product.category}</div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold text-green-600">{formatCurrency(product.price)}</span>
-                      <span className={`text-sm ${(product.stock_quantity || product.stock || 0) < 10 ? 'text-red-500' : 'text-gray-500'}`}>
-                        Stock: {product.stock_quantity || product.stock || 0}
-                      </span>
-                    </div>
-                    {(product.stock_quantity || product.stock || 0) <= 0 && (
-                      <div className="text-red-500 text-sm font-medium mt-1">Out of Stock</div>
-                    )}
+              
+              {/* Search Input */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search products by name, barcode, or brand..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                  autoFocus
+                />
+                {isSearching && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                   </div>
-                ))}
+                )}
               </div>
-            ) : (
-              <div className="text-center text-gray-500 py-8">
-                <p>No products found</p>
-                <p className="text-sm">Try adjusting your search criteria</p>
-              </div>
-            )}
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                  {searchResults.map((product, index) => (
+                    <div
+                      key={product.id}
+                      className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
+                        index === selectedIndex ? 'bg-blue-100 border-blue-300' : ''
+                      }`}
+                      onClick={() => selectProduct(product)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-600">{product.volume} • {product.category}</div>
+                          <div className="text-sm text-gray-500">
+                            Stock: {product.stock_quantity || product.stock || 0}
+                            {(product.stock_quantity || product.stock || 0) <= 0 && (
+                              <span className="text-red-500 ml-2">• Out of Stock</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-green-600">{formatCurrency(product.price)}</div>
+                          {index === selectedIndex && (
+                            <div className="text-xs text-blue-600">Press Enter to select</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* No Results */}
+              {searchTerm && searchResults.length === 0 && !isSearching && (
+                <div className="text-center text-gray-500 py-8">
+                  <p>No products found for "{searchTerm}"</p>
+                  <p className="text-sm">Try a different search term</p>
+                </div>
+              )}
+
+              {/* Instructions */}
+              {!searchTerm && (
+                <div className="text-center text-gray-500 py-8">
+                  <p className="text-lg font-medium">Search for products to add to cart</p>
+                  <p className="text-sm">Type product name, barcode, or brand</p>
+                  <div className="text-sm mt-2 space-y-1">
+                    <p>• Press <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">Enter</kbd> to select</p>
+                    <p>• Use <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">↑</kbd> <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">↓</kbd> to navigate</p>
+                    <p>• Press <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">Esc</kbd> to clear</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Shopping Cart */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-3">
           <div className="bg-white p-6 rounded-lg shadow sticky top-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-700">Shopping Cart</h3>

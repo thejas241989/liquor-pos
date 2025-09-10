@@ -15,7 +15,7 @@ router.get('/test', (req, res) => {
   res.json({ message: 'Reports routes are working!', timestamp: new Date() });
 });
 
-// Public day-wise sales report (no authentication required)
+// Public day-wise master report (no authentication required)
 router.get('/public-day-wise-sales', async (req, res) => {
   try {
     const { date, category_id } = req.query;
@@ -98,7 +98,7 @@ router.get('/public-day-wise-sales', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Public day-wise sales report error:', error);
+    console.error('Public day-wise master report error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
@@ -479,148 +479,6 @@ router.get('/inventory-summary', [verifyToken], async (req, res) => {
   }
 });
 
-// Day-Wise Sales Report
-router.get('/day-wise-sales', [
-  verifyToken,
-  query('date').isISO8601().withMessage('Date must be a valid date (YYYY-MM-DD)'),
-  query('category_id').optional().isMongoId(),
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
-    }
-
-    const { date, category_id, page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const reportDate = new Date(date);
-    reportDate.setHours(0, 0, 0, 0);
-
-    const pipeline = [
-      {
-        $match: {
-          date: {
-            $gte: reportDate,
-            $lt: new Date(reportDate.getTime() + 24 * 60 * 60 * 1000)
-          }
-        }
-      },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'product_id',
-          foreignField: '_id',
-          as: 'product'
-        }
-      },
-      {
-        $unwind: '$product'
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: 'product.category_id',
-          foreignField: '_id',
-          as: 'category'
-        }
-      },
-      {
-        $unwind: '$category'
-      },
-      {
-        $group: {
-          _id: {
-            date: '$date',
-            productId: '$product_id',
-            productName: '$product.name',
-            categoryName: '$category.name'
-          },
-          openingStock: { $first: '$opening_stock' },
-          stockInward: { $first: '$stock_inward' },
-          soldQuantity: { $first: '$sold_quantity' },
-          closingStock: { $first: '$closing_stock' },
-          averageSellingPrice: { $first: '$product.price' }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          date: '$_id.date',
-          productName: '$_id.productName',
-          categoryName: '$_id.categoryName',
-          openingStock: 1,
-          stockInward: 1,
-          soldQuantity: 1,
-          closingStock: 1,
-          averageSellingPrice: 1,
-          totalSalesValue: { $multiply: ['$soldQuantity', '$averageSellingPrice'] }
-        }
-      },
-      {
-        $sort: { date: -1, productName: 1 }
-      },
-      {
-        $facet: {
-          reports: [
-            { $skip: skip },
-            { $limit: parseInt(limit) }
-          ],
-          totalCount: [
-            { $count: 'count' }
-          ],
-          summary: [
-            {
-              $group: {
-                _id: null,
-                totalSoldQuantity: { $sum: '$soldQuantity' },
-                totalSalesValue: { $sum: '$totalSalesValue' },
-                totalStockInward: { $sum: '$stockInward' }
-              }
-            }
-          ]
-        }
-      }
-    ];
-
-    const result = await DailyStock.aggregate(pipeline);
-    const reports = result[0].reports;
-    const totalCount = result[0].totalCount[0]?.count || 0;
-    const summary = result[0].summary[0] || { totalSoldQuantity: 0, totalSalesValue: 0, totalStockInward: 0 };
-
-    res.json({
-      success: true,
-      data: {
-        report_date: reportDate.toISOString(),
-        summary: {
-          total_products: reports.length,
-          total_opening_stock: reports.reduce((sum, r) => sum + (r.openingStock || 0), 0),
-          total_sold_quantity: reports.reduce((sum, r) => sum + (r.soldQuantity || 0), 0),
-          total_closing_stock: reports.reduce((sum, r) => sum + (r.closingStock || 0), 0),
-          total_sales_amount: reports.reduce((sum, r) => sum + (r.totalSalesValue || 0), 0),
-          total_stock_value: reports.reduce((sum, r) => sum + (r.totalSalesValue || 0), 0)
-        },
-        products: reports.map((report, index) => ({
-          si_no: index + 1,
-          product_name: report.productName,
-          category_name: report.categoryName,
-          opening_stock: report.openingStock || 0,
-          stock_inward: report.stockInward || 0,
-          sold_quantity: report.soldQuantity || 0,
-          closing_stock: report.closingStock || 0,
-          total_sales_amount: report.totalSalesValue || 0,
-          stock_value: report.totalSalesValue || 0
-        }))
-      }
-    });
-
-  } catch (error) {
-    console.error('Day-wise sales report error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 
 // Inventory Report
 router.get('/inventory', [
@@ -1059,23 +917,51 @@ router.get('/biller-performance', [
   }
 });
 
-// Day-wise sales report
-router.get('/day-wise-sales', [verifyToken], async (req, res) => {
+// Day-wise master report
+router.get('/day-wise-sales', [
+  verifyToken,
+  query('date').optional().isISO8601().withMessage('Date must be a valid date (YYYY-MM-DD)'),
+  query('start_date').optional().isISO8601().withMessage('Start date must be a valid date (YYYY-MM-DD)'),
+  query('end_date').optional().isISO8601().withMessage('End date must be a valid date (YYYY-MM-DD)'),
+  query('category_id').optional().isMongoId()
+], async (req, res) => {
   try {
-    const { date, category_id } = req.query;
-    
-    if (!date) {
-      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
     }
 
-    const reportDate = new Date(date);
-    reportDate.setHours(0, 0, 0, 0);
+    const { date, start_date, end_date, category_id } = req.query;
+    
+    // Support both single date and date range
+    let startDate, endDate;
+    
+    if (date) {
+      // Single date mode
+      startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 1);
+    } else if (start_date && end_date) {
+      // Date range mode
+      startDate = new Date(start_date);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(end_date);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      return res.status(400).json({ 
+        message: 'Either date (YYYY-MM-DD) or start_date and end_date (YYYY-MM-DD) parameters are required' 
+      });
+    }
 
-    // Get daily stock records for the date
+    // Get daily stock records for the date range
     const pipeline = [
       {
         $match: {
-          date: reportDate
+          date: {
+            $gte: startDate,
+            $lt: endDate
+          }
         }
       },
       {
@@ -1108,13 +994,13 @@ router.get('/day-wise-sales', [verifyToken], async (req, res) => {
       });
     }
 
-    // Get sales data for the same date
+    // Get sales data for the same date range
     const salesPipeline = [
       {
         $match: {
           sale_date: {
-            $gte: reportDate,
-            $lt: new Date(reportDate.getTime() + 24 * 60 * 60 * 1000)
+            $gte: startDate,
+            $lt: endDate
           }
         }
       },
@@ -1183,16 +1069,19 @@ router.get('/day-wise-sales', [verifyToken], async (req, res) => {
     };
 
     res.json({
-      message: 'Day-wise sales report generated successfully',
+      message: 'Day-wise master report generated successfully',
       data: {
-        report_date: date,
+        report_date: date || `${start_date} to ${end_date}`,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: new Date(endDate.getTime() - 1).toISOString().split('T')[0],
+        is_date_range: !date,
         summary,
         products: reportData
       }
     });
 
   } catch (error) {
-    console.error('Day-wise sales report error:', error);
+    console.error('Day-wise master report error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

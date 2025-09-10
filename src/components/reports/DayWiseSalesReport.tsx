@@ -3,6 +3,9 @@ import { Download, Calendar, TrendingUp, Package, DollarSign } from 'lucide-reac
 
 interface DayWiseSalesReportData {
   report_date: string;
+  start_date?: string;
+  end_date?: string;
+  is_date_range?: boolean;
   summary: {
     total_products: number;
     total_opening_stock: number;
@@ -30,10 +33,23 @@ const DayWiseSalesReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [useDateRange, setUseDateRange] = useState(false);
 
   const generateReport = useCallback(async () => {
-    if (!reportDate) {
+    if (!useDateRange && !reportDate) {
       setError('Please select a date');
+      return;
+    }
+    
+    if (useDateRange && (!startDate || !endDate)) {
+      setError('Please select both start and end dates');
+      return;
+    }
+    
+    if (useDateRange && new Date(startDate) > new Date(endDate)) {
+      setError('Start date cannot be after end date');
       return;
     }
 
@@ -41,11 +57,19 @@ const DayWiseSalesReport: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('🔍 Fetching day-wise sales report for date:', reportDate);
+      // Build query parameters
+      let queryParams = `cache=${Date.now()}`;
+      if (useDateRange) {
+        queryParams += `&start_date=${startDate}&end_date=${endDate}`;
+        console.log('🔍 Fetching day-wise sales report for date range:', startDate, 'to', endDate);
+      } else {
+        queryParams += `&date=${reportDate}`;
+        console.log('🔍 Fetching day-wise sales report for date:', reportDate);
+      }
       
       // Use the authenticated endpoint with proper token
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5002/api/reports/day-wise-sales?date=${reportDate}&cache=${Date.now()}`, {
+      const response = await fetch(`http://localhost:5002/api/reports/day-wise-sales?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -61,7 +85,7 @@ const DayWiseSalesReport: React.FC = () => {
       const data = await response.json();
       console.log('📊 API Response data:', data);
       
-      if (data.success && data.data) {
+      if (data.data) {
         setReportData(data.data);
         console.log('✅ Report data set successfully');
       } else {
@@ -73,7 +97,7 @@ const DayWiseSalesReport: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [reportDate]);
+  }, [reportDate, startDate, endDate, useDateRange]);
 
   useEffect(() => {
     generateReport();
@@ -113,7 +137,10 @@ const DayWiseSalesReport: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `day-wise-sales-${reportDate}.csv`;
+    const filename = reportData.is_date_range 
+      ? `day-wise-sales-${reportData.start_date}-to-${reportData.end_date}.csv`
+      : `day-wise-sales-${reportDate}.csv`;
+    a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -138,15 +165,51 @@ const DayWiseSalesReport: React.FC = () => {
             <p className="text-gray-600 mt-1">Daily stock movements and sales analysis</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Date Range Toggle */}
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
               <input
-                type="date"
-                value={reportDate}
-                onChange={(e) => setReportDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="checkbox"
+                id="useDateRange"
+                checked={useDateRange}
+                onChange={(e) => setUseDateRange(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
+              <label htmlFor="useDateRange" className="text-sm text-gray-700">
+                Date Range
+              </label>
             </div>
+
+            {!useDateRange ? (
+              /* Single Date Selection */
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            ) : (
+              /* Date Range Selection */
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-500">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+            
             <button
               onClick={generateReport}
               disabled={loading}
@@ -154,6 +217,7 @@ const DayWiseSalesReport: React.FC = () => {
             >
               {loading ? 'Loading...' : 'Generate Report'}
             </button>
+            
             {reportData && (
               <button
                 onClick={exportToCSV}
@@ -206,7 +270,7 @@ const DayWiseSalesReport: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total Products</p>
-                  <p className="text-2xl font-bold text-gray-900">{reportData.summary.total_products}</p>
+                  <p className="text-2xl font-bold text-gray-900">{reportData?.summary.total_products || 0}</p>
                 </div>
               </div>
             </div>
@@ -218,7 +282,7 @@ const DayWiseSalesReport: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total Stock Inward</p>
-                  <p className="text-2xl font-bold text-gray-900">{reportData.summary.total_stock_inward}</p>
+                  <p className="text-2xl font-bold text-gray-900">{reportData?.summary.total_stock_inward || 0}</p>
                 </div>
               </div>
             </div>
@@ -230,7 +294,7 @@ const DayWiseSalesReport: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total Sales</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData.summary.total_sales_amount)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData?.summary.total_sales_amount || 0)}</p>
                 </div>
               </div>
             </div>
@@ -242,7 +306,7 @@ const DayWiseSalesReport: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Stock Value</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData.summary.total_stock_value)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData?.summary.total_stock_value || 0)}</p>
                 </div>
               </div>
             </div>
@@ -252,7 +316,12 @@ const DayWiseSalesReport: React.FC = () => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Product Details</h2>
-              <p className="text-sm text-gray-600">Report Date: {new Date(reportData.report_date).toLocaleDateString()}</p>
+              <p className="text-sm text-gray-600">
+                {reportData?.is_date_range 
+                  ? `Report Period: ${new Date(reportData.start_date!).toLocaleDateString()} to ${new Date(reportData.end_date!).toLocaleDateString()}`
+                  : `Report Date: ${new Date(reportData?.report_date || '').toLocaleDateString()}`
+                }
+              </p>
             </div>
             
             <div className="overflow-x-auto">
@@ -271,7 +340,7 @@ const DayWiseSalesReport: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {reportData.products.map((product) => (
+                  {reportData?.products?.map((product) => (
                     <tr key={product.si_no} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.si_no}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.product_name}</td>

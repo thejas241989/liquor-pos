@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, TrendingUp, AlertTriangle, DollarSign, BarChart3, FileText, RefreshCw } from 'lucide-react';
+import { Package, Plus, TrendingUp, AlertTriangle, DollarSign, BarChart3, FileText } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
 import { apiService } from '../../services/api';
@@ -20,6 +20,7 @@ interface Product {
   category?: {
     name: string;
   };
+  category_name?: string; // Support flat category name from API
 }
 
 interface InventorySummary {
@@ -43,8 +44,8 @@ const InventoryManagement: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch products
-      const productsResponse = await apiService.getProducts();
+      // Fetch products - get all products by setting a high limit
+      const productsResponse = await apiService.getProducts({ limit: 1000 });
       if (productsResponse.success) {
         setProducts(productsResponse.data || []);
       }
@@ -317,7 +318,7 @@ const InventoryManagement: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {product.category?.name || 'Unknown'}
+                            {product.category?.name || product.category_name || 'Unknown'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">

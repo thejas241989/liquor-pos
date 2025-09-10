@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Day-wise Sales Report Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { padding: 8px; margin: 5px; }
+        .result { margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { background-color: #ffebee; border-color: #f44336; }
+        .success { background-color: #e8f5e8; border-color: #4caf50; }
+        .info { background-color: #e3f2fd; border-color: #2196f3; }
+        pre { background-color: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .comparison { display: flex; gap: 20px; }
+        .comparison > div { flex: 1; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .highlight { background-color: #fff3cd; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Comprehensive Day-wise Sales Report Test</h1>
+        
+        <div class="form-group">
+            <button onclick="login()">Login First</button>
+            <span id="loginStatus"></span>
+        </div>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="useDateRange" onchange="toggleDateInputs()">
+                Use Date Range
+            </label>
+        </div>
+        
+        <div id="singleDateInput" class="form-group">
+            <label for="date">Date:</label>
+            <input type="date" id="date" value="2025-09-01">
+        </div>
+        
+        <div id="dateRangeInputs" class="form-group" style="display: none;">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" value="2025-09-01">
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate" value="2025-09-02">
+        </div>
+        
+        <button onclick="testReport()">Test Report</button>
+        <button onclick="runComprehensiveTest()">Run Comprehensive Test</button>
+        
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        let token = null;
+        
+        function toggleDateInputs() {
+            const useDateRange = document.getElementById('useDateRange').checked;
+            const singleDateInput = document.getElementById('singleDateInput');
+            const dateRangeInputs = document.getElementById('dateRangeInputs');
+            
+            if (useDateRange) {
+                singleDateInput.style.display = 'none';
+                dateRangeInputs.style.display = 'block';
+            } else {
+                singleDateInput.style.display = 'block';
+                dateRangeInputs.style.display = 'none';
+            }
+        }
+        
+        async function login() {
+            try {
+                const response = await fetch('http://localhost:5002/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.token) {
+                    token = data.token;
+                    document.getElementById('loginStatus').innerHTML = '<span style="color: green;">✅ Logged in successfully</span>';
+                    showResult('Login successful! Token received.', 'success');
+                } else {
+                    document.getElementById('loginStatus').innerHTML = '<span style="color: red;">❌ Login failed</span>';
+                    showResult('Login failed: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                document.getElementById('loginStatus').innerHTML = '<span style="color: red;">❌ Login error</span>';
+                showResult('Login error: ' + error.message, 'error');
+            }
+        }
+        
+        async function testReport() {
+            if (!token) {
+                showResult('Please login first!', 'error');
+                return;
+            }
+            
+            try {
+                const useDateRange = document.getElementById('useDateRange').checked;
+                let url = 'http://localhost:5002/api/reports/day-wise-sales?cache=' + Date.now();
+                
+                if (useDateRange) {
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+                    if (!startDate || !endDate) {
+                        showResult('Please select both start and end dates', 'error');
+                        return;
+                    }
+                    url += `&start_date=${startDate}&end_date=${endDate}`;
+                } else {
+                    const date = document.getElementById('date').value;
+                    if (!date) {
+                        showResult('Please select a date', 'error');
+                        return;
+                    }
+                    url += `&date=${date}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const summary = data.data.summary;
+                    const products = data.data.products;
+                    
+                    let html = `
+                        <h3>✅ Report Generated Successfully!</h3>
+                        <p><strong>Report Date:</strong> ${data.data.report_date}</p>
+                        <p><strong>Is Date Range:</strong> ${data.data.is_date_range}</p>
+                        
+                        <h4>Summary</h4>
+                        <table>
+                            <tr><th>Metric</th><th>Value</th></tr>
+                            <tr><td>Total Products</td><td>${summary.total_products}</td></tr>
+                            <tr><td>Total Opening Stock</td><td>${summary.total_opening_stock}</td></tr>
+                            <tr><td>Total Stock Inward</td><td>${summary.total_stock_inward}</td></tr>
+                            <tr><td>Total Sold Quantity</td><td>${summary.total_sold_quantity}</td></tr>
+                            <tr><td>Total Closing Stock</td><td>${summary.total_closing_stock}</td></tr>
+                            <tr><td>Total Sales Amount</td><td>₹${summary.total_sales_amount}</td></tr>
+                            <tr><td>Total Stock Value</td><td>₹${summary.total_stock_value}</td></tr>
+                        </table>
+                        
+                        <h4>Product Details (First 5)</h4>
+                        <table>
+                            <tr>
+                                <th>SI No</th><th>Product Name</th><th>Category</th>
+                                <th>Opening Stock</th><th>Stock Inward</th><th>Sold Qty</th>
+                                <th>Closing Stock</th><th>Sales Amount</th><th>Stock Value</th>
+                            </tr>
+                    `;
+                    
+                    products.slice(0, 5).forEach(product => {
+                        html += `
+                            <tr>
+                                <td>${product.si_no}</td>
+                                <td>${product.product_name}</td>
+                                <td>${product.category_name}</td>
+                                <td>${product.opening_stock}</td>
+                                <td>${product.stock_inward}</td>
+                                <td>${product.sold_quantity}</td>
+                                <td>${product.closing_stock}</td>
+                                <td>₹${product.total_sales_amount}</td>
+                                <td>₹${product.stock_value}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += `</table>`;
+                    
+                    // Data validation checks
+                    html += `<h4>Data Validation Checks</h4><ul>`;
+                    
+                    // Check if stock calculations are correct
+                    let validationPassed = true;
+                    products.forEach(product => {
+                        const calculatedClosing = product.opening_stock + product.stock_inward - product.sold_quantity;
+                        if (Math.abs(calculatedClosing - product.closing_stock) > 0.01) {
+                            html += `<li style="color: red;">❌ ${product.product_name}: Closing stock mismatch (${product.closing_stock} vs calculated ${calculatedClosing})</li>`;
+                            validationPassed = false;
+                        }
+                    });
+                    
+                    if (validationPassed) {
+                        html += `<li style="color: green;">✅ All stock calculations are correct</li>`;
+                    }
+                    
+                    // Check if stock value is different from sales amount
+                    const stockValueDifferent = products.some(p => p.stock_value !== p.total_sales_amount);
+                    if (stockValueDifferent) {
+                        html += `<li style="color: green;">✅ Stock value is correctly calculated (different from sales amount)</li>`;
+                    } else {
+                        html += `<li style="color: orange;">⚠️ Stock value equals sales amount (may need verification)</li>`;
+                    }
+                    
+                    html += `</ul>`;
+                    
+                    showResult(html, 'success');
+                } else {
+                    showResult('API Error: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResult('Request error: ' + error.message, 'error');
+            }
+        }
+        
+        async function runComprehensiveTest() {
+            if (!token) {
+                showResult('Please login first!', 'error');
+                return;
+            }
+            
+            showResult('Running comprehensive test...', 'info');
+            
+            try {
+                // Test single date
+                const singleDateResponse = await fetch(`http://localhost:5002/api/reports/day-wise-sales?date=2025-09-01&cache=${Date.now()}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                // Test date range
+                const dateRangeResponse = await fetch(`http://localhost:5002/api/reports/day-wise-sales?start_date=2025-09-01&end_date=2025-09-02&cache=${Date.now()}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const singleDateData = await singleDateResponse.json();
+                const dateRangeData = await dateRangeResponse.json();
+                
+                if (singleDateResponse.ok && dateRangeResponse.ok) {
+                    const singleSummary = singleDateData.data.summary;
+                    const rangeSummary = dateRangeData.data.summary;
+                    
+                    let html = `
+                        <h3>🔍 Comprehensive Test Results</h3>
+                        
+                        <div class="comparison">
+                            <div>
+                                <h4>Single Date (2025-09-01)</h4>
+                                <table>
+                                    <tr><th>Metric</th><th>Value</th></tr>
+                                    <tr><td>Products</td><td>${singleSummary.total_products}</td></tr>
+                                    <tr><td>Opening Stock</td><td>${singleSummary.total_opening_stock}</td></tr>
+                                    <tr><td>Stock Inward</td><td>${singleSummary.total_stock_inward}</td></tr>
+                                    <tr><td>Sold Quantity</td><td>${singleSummary.total_sold_quantity}</td></tr>
+                                    <tr><td>Closing Stock</td><td>${singleSummary.total_closing_stock}</td></tr>
+                                    <tr><td>Sales Amount</td><td>₹${singleSummary.total_sales_amount}</td></tr>
+                                    <tr><td>Stock Value</td><td>₹${singleSummary.total_stock_value}</td></tr>
+                                </table>
+                            </div>
+                            
+                            <div>
+                                <h4>Date Range (2025-09-01 to 2025-09-02)</h4>
+                                <table>
+                                    <tr><th>Metric</th><th>Value</th></tr>
+                                    <tr><td>Products</td><td>${rangeSummary.total_products}</td></tr>
+                                    <tr><td>Opening Stock</td><td>${rangeSummary.total_opening_stock}</td></tr>
+                                    <tr><td>Stock Inward</td><td>${rangeSummary.total_stock_inward}</td></tr>
+                                    <tr><td>Sold Quantity</td><td>${rangeSummary.total_sold_quantity}</td></tr>
+                                    <tr><td>Closing Stock</td><td>${rangeSummary.total_closing_stock}</td></tr>
+                                    <tr><td>Sales Amount</td><td>₹${rangeSummary.total_sales_amount}</td></tr>
+                                    <tr><td>Stock Value</td><td>₹${rangeSummary.total_stock_value}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <h4>Analysis</h4>
+                        <ul>
+                    `;
+                    
+                    // Check if date range has more data (as expected)
+                    if (rangeSummary.total_products >= singleSummary.total_products) {
+                        html += `<li style="color: green;">✅ Date range shows more/equal products (${rangeSummary.total_products} vs ${singleSummary.total_products})</li>`;
+                    } else {
+                        html += `<li style="color: red;">❌ Date range shows fewer products (${rangeSummary.total_products} vs ${singleSummary.total_products})</li>`;
+                    }
+                    
+                    if (rangeSummary.total_sold_quantity >= singleSummary.total_sold_quantity) {
+                        html += `<li style="color: green;">✅ Date range shows more/equal sales (${rangeSummary.total_sold_quantity} vs ${singleSummary.total_sold_quantity})</li>`;
+                    } else {
+                        html += `<li style="color: red;">❌ Date range shows fewer sales (${rangeSummary.total_sold_quantity} vs ${singleSummary.total_sold_quantity})</li>`;
+                    }
+                    
+                    if (rangeSummary.total_stock_inward >= singleSummary.total_stock_inward) {
+                        html += `<li style="color: green;">✅ Date range shows more/equal stock inward (${rangeSummary.total_stock_inward} vs ${singleSummary.total_stock_inward})</li>`;
+                    } else {
+                        html += `<li style="color: red;">❌ Date range shows fewer stock inward (${rangeSummary.total_stock_inward} vs ${singleSummary.total_stock_inward})</li>`;
+                    }
+                    
+                    html += `</ul>`;
+                    
+                    showResult(html, 'success');
+                } else {
+                    showResult('Test failed: ' + JSON.stringify({singleDateData, dateRangeData}), 'error');
+                }
+            } catch (error) {
+                showResult('Comprehensive test error: ' + error.message, 'error');
+            }
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

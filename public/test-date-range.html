@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Date Range Functionality</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { padding: 8px; margin: 5px; }
+        .result { margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { background-color: #ffebee; border-color: #f44336; }
+        .success { background-color: #e8f5e8; border-color: #4caf50; }
+        pre { background-color: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Date Range Functionality</h1>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="useDateRange" onchange="toggleDateInputs()">
+                Use Date Range
+            </label>
+        </div>
+        
+        <div id="singleDateInput" class="form-group">
+            <label for="date">Date:</label>
+            <input type="date" id="date" value="2025-09-01">
+        </div>
+        
+        <div id="dateRangeInputs" class="form-group" style="display: none;">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" value="2025-09-01">
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate" value="2025-09-02">
+        </div>
+        
+        <button onclick="testReport()">Test Report</button>
+        <button onclick="login()">Login First</button>
+        
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        let token = null;
+        
+        function toggleDateInputs() {
+            const useDateRange = document.getElementById('useDateRange').checked;
+            const singleDateInput = document.getElementById('singleDateInput');
+            const dateRangeInputs = document.getElementById('dateRangeInputs');
+            
+            if (useDateRange) {
+                singleDateInput.style.display = 'none';
+                dateRangeInputs.style.display = 'block';
+            } else {
+                singleDateInput.style.display = 'block';
+                dateRangeInputs.style.display = 'none';
+            }
+        }
+        
+        async function login() {
+            try {
+                const response = await fetch('http://localhost:5002/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.token) {
+                    token = data.token;
+                    showResult('Login successful! Token received.', 'success');
+                } else {
+                    showResult('Login failed: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResult('Login error: ' + error.message, 'error');
+            }
+        }
+        
+        async function testReport() {
+            if (!token) {
+                showResult('Please login first!', 'error');
+                return;
+            }
+            
+            try {
+                const useDateRange = document.getElementById('useDateRange').checked;
+                let url = 'http://localhost:5002/api/reports/day-wise-sales?cache=' + Date.now();
+                
+                if (useDateRange) {
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+                    if (!startDate || !endDate) {
+                        showResult('Please select both start and end dates', 'error');
+                        return;
+                    }
+                    url += `&start_date=${startDate}&end_date=${endDate}`;
+                } else {
+                    const date = document.getElementById('date').value;
+                    if (!date) {
+                        showResult('Please select a date', 'error');
+                        return;
+                    }
+                    url += `&date=${date}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(`
+                        <h3>✅ Report Generated Successfully!</h3>
+                        <p><strong>Report Date:</strong> ${data.data.report_date}</p>
+                        <p><strong>Is Date Range:</strong> ${data.data.is_date_range}</p>
+                        <p><strong>Total Products:</strong> ${data.data.summary.total_products}</p>
+                        <p><strong>Total Stock Inward:</strong> ${data.data.summary.total_stock_inward}</p>
+                        <p><strong>Total Sales Amount:</strong> ₹${data.data.summary.total_sales_amount}</p>
+                        <details>
+                            <summary>Full Response</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    `, 'success');
+                } else {
+                    showResult('API Error: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResult('Request error: ' + error.message, 'error');
+            }
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
