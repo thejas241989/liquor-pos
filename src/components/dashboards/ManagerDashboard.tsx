@@ -22,9 +22,6 @@ const ManagerDashboard: React.FC = () => {
   const { stats, loading, error, refetch } = useDashboardData();
 
   // Debug logging
-  console.log('🔍 Manager Dashboard - Stats:', stats);
-  console.log('🔍 Manager Dashboard - Loading:', loading);
-  console.log('🔍 Manager Dashboard - Error:', error);
 
   const getHeaderActions = () => (
     <>

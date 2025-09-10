@@ -61,10 +61,10 @@ const DayWiseSalesReport: React.FC = () => {
       let queryParams = `cache=${Date.now()}`;
       if (useDateRange) {
         queryParams += `&start_date=${startDate}&end_date=${endDate}`;
-        console.log('🔍 Fetching day-wise sales report for date range:', startDate, 'to', endDate);
+
       } else {
         queryParams += `&date=${reportDate}`;
-        console.log('🔍 Fetching day-wise sales report for date:', reportDate);
+
       }
       
       // Use the authenticated endpoint with proper token
@@ -75,19 +75,16 @@ const DayWiseSalesReport: React.FC = () => {
           'Content-Type': 'application/json'
         }
       });
-      
-      console.log('📡 API Response status:', response.status);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('📊 API Response data:', data);
-      
+
       if (data.data) {
         setReportData(data.data);
-        console.log('✅ Report data set successfully');
+
       } else {
         throw new Error(data.message || 'Failed to fetch report data');
       }

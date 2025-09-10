@@ -70,9 +70,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(data.user);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      
-      console.log('Login successful for user:', data.user.username, 'with role:', data.user.role);
-      
+
       return true;
     } catch (error) {
       console.error('Login failed:', error);
@@ -85,7 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    console.log('Logged out successfully');
+
   };
 
   const hasRole = (role: string | string[]): boolean => {

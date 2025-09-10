@@ -9,8 +9,7 @@ const dailyStockSchema = new mongoose.Schema({
   },
   date: {
     type: Date,
-    required: true,
-    index: true
+    required: true
   },
   opening_stock: {
     type: Number,

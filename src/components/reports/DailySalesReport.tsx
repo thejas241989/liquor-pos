@@ -128,8 +128,6 @@ const DailySalesReport: React.FC<{ data?: any }> = ({ data: initialData }) => {
         url += `date=${selectedDate}`;
       }
 
-      console.log('🔍 Fetching raw sales data:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -137,8 +135,6 @@ const DailySalesReport: React.FC<{ data?: any }> = ({ data: initialData }) => {
           'Content-Type': 'application/json',
         },
       });
-
-      console.log('📡 API Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -156,7 +152,6 @@ const DailySalesReport: React.FC<{ data?: any }> = ({ data: initialData }) => {
       }
 
       const responseText = await response.text();
-      console.log('📊 API Response text:', responseText);
 
       let data;
       try {
@@ -167,8 +162,6 @@ const DailySalesReport: React.FC<{ data?: any }> = ({ data: initialData }) => {
         const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
         throw new Error(`Invalid JSON response: ${errorMessage}. Response: ${responseText.substring(0, 200)}...`);
       }
-
-      console.log('📊 API Response data:', data);
 
       if (data.success && data.data) {
         // Transform raw sales data into the expected format
@@ -264,7 +257,6 @@ const DailySalesReport: React.FC<{ data?: any }> = ({ data: initialData }) => {
               Use Date Range
             </label>
           </div>
-
 
           {!useDateRange ? (
             <div className="flex items-center gap-2">

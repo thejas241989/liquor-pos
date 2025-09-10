@@ -48,8 +48,7 @@ const CategoryManagement: React.FC = () => {
 
         if (res.ok) {
           const json = await res.json();
-          console.log('Categories loaded in CategoryManagement:', json);
-          
+
           // Map MongoDB categories to correct structure
           let list = [];
           if (json.data && Array.isArray(json.data)) {

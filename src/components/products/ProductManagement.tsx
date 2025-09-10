@@ -472,9 +472,7 @@ const ProductManagement: React.FC = () => {
 
         if (categoriesResponse.ok) {
           const categoriesData = await categoriesResponse.json();
-          
-          console.log('Categories data from API:', categoriesData);
-          
+
           // Handle categories with MongoDB structure mapping
           if (categoriesData.data && Array.isArray(categoriesData.data)) {
             categoriesList = categoriesData.data.map((cat: any) => ({
@@ -503,10 +501,7 @@ const ProductManagement: React.FC = () => {
       
       setProducts(productsList);
       setCategories(categoriesList);
-      
-      console.log('All products data:', allProducts);
-      console.log('Categories loaded:', categoriesList);
-      
+
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

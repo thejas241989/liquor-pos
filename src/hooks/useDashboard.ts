@@ -19,8 +19,6 @@ export const useDashboardData = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('🔄 Fetching dashboard data...');
 
       const [summaryResponse, productsResponse, categoriesResponse] = await Promise.all([
         apiService.getInventorySummary(),
@@ -28,23 +26,10 @@ export const useDashboardData = () => {
         apiService.getCategories(),
       ]);
 
-      console.log('📊 Summary response:', summaryResponse);
-      console.log('📦 Products response:', productsResponse);
-      console.log('🏷️ Categories response:', categoriesResponse);
-
       // Process summary data with better error handling
       const summary = summaryResponse.data || summaryResponse;
-      console.log('📊 Processing summary data:', summary);
-      
-      setStats({
-        totalProducts: summary.total_products || summary.totalProducts || 0,
-        totalCategories: summary.total_categories || summary.totalCategories || 0,
-        lowStockItems: summary.low_stock_items || summary.lowStockItems || 0,
-        totalInventoryValue: summary.total_inventory_value || summary.totalInventoryValue || 0,
-        totalCostValue: summary.total_cost_value || summary.totalCostValue || 0,
-      });
 
-      console.log('✅ Dashboard stats updated:', {
+      setStats({
         totalProducts: summary.total_products || summary.totalProducts || 0,
         totalCategories: summary.total_categories || summary.totalCategories || 0,
         lowStockItems: summary.low_stock_items || summary.lowStockItems || 0,
@@ -90,13 +75,13 @@ export const useDashboardData = () => {
   // Real-time update handler
   useEffect(() => {
     const handleInventoryUpdate = (e: any) => {
-      console.log('🔄 Dashboard received inventory update event:', e.detail);
+
       const detail = e.detail;
       const summary = detail?.summary || detail;
       const soldItems = detail?.soldItems || [];
 
       if (summary) {
-        console.log('📊 Updating dashboard stats with summary:', summary);
+
         setStats(prev => ({
           totalProducts: (summary.total_products || summary.totalProducts) ?? prev.totalProducts,
           totalCategories: (summary.total_categories || summary.totalCategories) ?? prev.totalCategories,
@@ -107,13 +92,13 @@ export const useDashboardData = () => {
       }
 
       if (soldItems.length > 0) {
-        console.log('🛒 Updating product stock for sold items:', soldItems);
+
         setProducts(prevProducts =>
           prevProducts.map(product => {
             const soldItem = soldItems.find((item: any) => String(item.id) === String(product.id));
             if (soldItem) {
               const newStock = Math.max(0, product.stock - soldItem.quantity);
-              console.log(`📦 Updated ${product.name} stock: ${product.stock} -> ${newStock}`);
+
               return {
                 ...product,
                 stock: newStock,
@@ -149,11 +134,11 @@ export const useInventorySummary = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Fetching inventory summary...');
+
       const response = await apiService.getInventorySummary();
-      console.log('📊 Inventory summary response:', response);
+
       setSummary(response.data || response);
-      console.log('✅ Inventory summary updated:', response.data || response);
+
     } catch (err) {
       console.error('❌ Inventory summary fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch inventory summary');
@@ -170,11 +155,11 @@ export const useInventorySummary = () => {
   // Real-time update handler
   useEffect(() => {
     const handleInventoryUpdate = (e: any) => {
-      console.log('🔄 Inventory summary received update event:', e.detail);
+
       const detail = e.detail;
       const summary = detail?.summary || detail;
       if (summary) {
-        console.log('📊 Updating inventory summary with:', summary);
+
         // ensure we include cost value if present
         setSummary((prev: any) => ({ ...(prev || {}), ...summary }));
       }

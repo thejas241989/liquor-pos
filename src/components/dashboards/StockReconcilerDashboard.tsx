@@ -22,9 +22,6 @@ const StockReconcilerDashboard: React.FC = () => {
   const { summary, loading, error, refetch } = useInventorySummary();
 
   // Debug logging
-  console.log('🔍 Stock Reconciler Dashboard - Summary:', summary);
-  console.log('🔍 Stock Reconciler Dashboard - Loading:', loading);
-  console.log('🔍 Stock Reconciler Dashboard - Error:', error);
 
   const getHeaderActions = () => (
     <>
