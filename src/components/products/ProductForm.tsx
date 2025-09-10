@@ -160,8 +160,7 @@ const ProductForm: React.FC = () => {
         });
         
         if (res.ok) {
-          const responseData = await res.json();
-
+          // Product created successfully
         } else {
           const errorData = await res.json();
           console.error('Create failed:', errorData);

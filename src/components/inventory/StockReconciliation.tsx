@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Package, Calendar, User, FileText, Search } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { CheckCircle, AlertTriangle, Package, Calendar, FileText, Search } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
 
@@ -58,14 +58,7 @@ const StockReconciliation: React.FC = () => {
   // History states
   const [history, setHistory] = useState<Reconciliation[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  useEffect(() => {
-    if (activeTab === 'history') {
-      fetchHistory();
-    }
-  }, [activeTab, currentPage]);
+  const [currentPage] = useState(1);
 
   useEffect(() => {
     if (currentReconciliation) {
@@ -77,7 +70,7 @@ const StockReconciliation: React.FC = () => {
     }
   }, [currentReconciliation, searchTerm]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       setHistoryLoading(true);
       const response = await apiService.requestWithParams('/stock/reconciliation', {
@@ -86,7 +79,6 @@ const StockReconciliation: React.FC = () => {
       });
       if (response.message) {
         setHistory(response.data);
-        setTotalPages(response.pagination?.total_pages || 1);
       }
     } catch (error) {
       console.error('Error fetching history:', error);
@@ -94,7 +86,13 @@ const StockReconciliation: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab, currentPage, fetchHistory]);
 
   const createReconciliation = async () => {
     if (!reconciliationDate) {

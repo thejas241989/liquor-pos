@@ -86,7 +86,7 @@ const ProductManagement: React.FC = () => {
         initializeIndianProducts();
       }
     }
-  }, [loading, categories.length, products.length]);
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeCategories = () => {
     // Initialize some default categories if none exist

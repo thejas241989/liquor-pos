@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ClipboardCheck, 
   AlertTriangle, 
-  CheckCircle, 
   Clock, 
   Search, 
   FileText,

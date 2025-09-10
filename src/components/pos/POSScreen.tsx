@@ -145,7 +145,7 @@ const POSScreen: React.FC = () => {
         const filtered = products.filter(product =>
           product.name.toLowerCase().includes(term.toLowerCase()) ||
           (product.barcode && product.barcode.includes(term)) ||
-          ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+          (product.brand && product.brand.toLowerCase().includes(term.toLowerCase()))
         );
         setSearchResults(filtered);
         setSelectedIndex(0); // Select first result by default
@@ -156,7 +156,7 @@ const POSScreen: React.FC = () => {
       const filtered = products.filter(product =>
         product.name.toLowerCase().includes(term.toLowerCase()) ||
         (product.barcode && product.barcode.includes(term)) ||
-        ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+        (product.brand && product.brand.toLowerCase().includes(term.toLowerCase()))
       );
       setSearchResults(filtered);
     } finally {
@@ -249,35 +249,11 @@ const POSScreen: React.FC = () => {
               });
             }
 
-            let categoriesList = [];
-            if (categoriesResponse.ok) {
-              const categoriesData = await categoriesResponse.json();
-
-              if (categoriesData.data && Array.isArray(categoriesData.data)) {
-                // Map MongoDB categories to the correct structure
-                categoriesList = categoriesData.data.map((cat: any) => ({
-                  id: String(cat._id || cat.id),
-                  name: cat.name,
-                  description: cat.description || ''
-                }));
-              } else if (Array.isArray(categoriesData)) {
-                categoriesList = categoriesData.map((cat: any) => ({
-                  id: String(cat._id || cat.id),
-                  name: cat.name,
-                  description: cat.description || ''
-                }));
-              }
-            }
-            
-            // setCategories(categoriesList); // Removed unused categories
+            // Categories are not needed for POS functionality
 
           } catch (categoryError) {
             console.warn('Failed to fetch categories:', categoryError);
-            // Extract unique categories from products as fallback
-            const uniqueCategories = Array.from(new Set(mappedProducts.map((p: any) => p.category)))
-              .filter(Boolean)
-              .map((name, index) => ({ id: String(index + 1), name: String(name), description: '' }));
-            // setCategories(uniqueCategories); // Removed unused categories
+            // Categories are not needed for POS functionality
 
           }
           
@@ -319,34 +295,9 @@ const POSScreen: React.FC = () => {
             barcode: product.barcode || '' // Ensure barcode is always a string
           }));
 
-          // Fetch categories
-          try {
-            const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            let categoriesList = [];
-            if (categoriesResponse.ok) {
-              const categoriesData = await categoriesResponse.json();
-
-              if (categoriesData.data && Array.isArray(categoriesData.data)) {
-                categoriesList = categoriesData.data;
-              } else if (Array.isArray(categoriesData)) {
-                categoriesList = categoriesData;
-              }
-            }
-            
-            setProducts(mappedProducts);
-            // setCategories(categoriesList); // Removed unused categories
-            return;
-          } catch (categoryError) {
-            console.warn('Failed to fetch categories:', categoryError);
-            setProducts(mappedProducts);
-            return;
-          }
+          // Categories are not needed for POS functionality
+          setProducts(mappedProducts);
+          return;
         }
       } catch (testServerError) {
         console.warn('Test server not available, trying paginated API:', testServerError);
@@ -375,17 +326,7 @@ const POSScreen: React.FC = () => {
         currentPage++;
       } while (currentPage <= totalPages);
       
-      // Fetch categories
-      const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (allProducts.length > 0 && categoriesResponse.ok) {
-        const categoriesData = await categoriesResponse.json();
-        
+      if (allProducts.length > 0) {
         // Map products to correct structure
         const productsList = allProducts.map((product: any) => ({
           ...product,
@@ -395,13 +336,9 @@ const POSScreen: React.FC = () => {
           barcode: product.barcode || '' // Ensure barcode is always a string
         }));
         
-        // Handle categories
-        const categoriesList = categoriesData.data && Array.isArray(categoriesData.data) 
-          ? categoriesData.data 
-          : [];
+        // Categories are not needed for POS functionality
         
         setProducts(productsList);
-        // setCategories(categoriesList); // Removed unused categories
       }
     } catch (error) {
       console.error('Error fetching data:', error);
