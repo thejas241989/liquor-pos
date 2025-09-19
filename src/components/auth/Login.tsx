@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, EyeOff, User, Lock, Shield } from 'lucide-react';
 
@@ -11,7 +11,6 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('');
   const { login, isAuthenticated, user } = useAuth();
-  const navigate = useNavigate();
 
   // Role-based dashboard routing
   function getDefaultRedirect(role?: string): string {

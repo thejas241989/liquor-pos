@@ -28,17 +28,10 @@ interface CartItem {
   subtotal: number;
 }
 
-// interface Category {
-//   id: string;
-//   name: string;
-//   description: string;
-// }
-
 const POSScreen: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
-  // const [categories, setCategories] = useState<Category[]>([]); // Removed unused variable
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,17 +142,15 @@ const POSScreen: React.FC = () => {
 
         setSearchResults(mappedResults);
         setSelectedIndex(0); // Select first result by default
-        console.log('🔍 Search results set:', mappedResults.length, 'First result selected');
       } else {
         // Fallback to local search
         const filtered = products.filter(product =>
           product.name.toLowerCase().includes(term.toLowerCase()) ||
           (product.barcode && product.barcode.includes(term)) ||
-          ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+          (product.brand && product.brand.toLowerCase().includes(term.toLowerCase()))
         );
         setSearchResults(filtered);
         setSelectedIndex(0); // Select first result by default
-        console.log('🔍 Local search results set:', filtered.length, 'First result selected');
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -167,7 +158,7 @@ const POSScreen: React.FC = () => {
       const filtered = products.filter(product =>
         product.name.toLowerCase().includes(term.toLowerCase()) ||
         (product.barcode && product.barcode.includes(term)) ||
-        ((product as any).brand && (product as any).brand.toLowerCase().includes(term.toLowerCase()))
+        (product.brand && product.brand.toLowerCase().includes(term.toLowerCase()))
       );
       setSearchResults(filtered);
     } finally {
@@ -220,7 +211,6 @@ const POSScreen: React.FC = () => {
     };
   }, [searchResults, showPaymentModal]);
 
-
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -235,7 +225,6 @@ const POSScreen: React.FC = () => {
         
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
-          console.log('Products response from test endpoint:', productsData);
           
           // Handle test server response format
           let productsList = [];
@@ -244,9 +233,7 @@ const POSScreen: React.FC = () => {
           } else if (Array.isArray(productsData)) {
             productsList = productsData;
           }
-          
-          console.log('Raw products list:', productsList);
-          
+
           // Map products to correct structure
           const mappedProducts = productsList.map((product: any) => ({
             ...product,
@@ -256,10 +243,7 @@ const POSScreen: React.FC = () => {
             stock_quantity: product.stock_quantity || product.stock || 0,
             barcode: product.barcode || '' // Ensure barcode is always a string
           }));
-          
-          console.log('Mapped products:', mappedProducts);
-          console.log('Sample product:', mappedProducts[0]);
-          
+
           // Fetch categories from test endpoint or authenticated endpoint
           try {
             let categoriesResponse = await fetch('http://localhost:5002/api/categories/test', {
@@ -278,37 +262,12 @@ const POSScreen: React.FC = () => {
               });
             }
 
-            let categoriesList = [];
-            if (categoriesResponse.ok) {
-              const categoriesData = await categoriesResponse.json();
-              console.log('Categories response:', categoriesData);
-              
-              if (categoriesData.data && Array.isArray(categoriesData.data)) {
-                // Map MongoDB categories to the correct structure
-                categoriesList = categoriesData.data.map((cat: any) => ({
-                  id: String(cat._id || cat.id),
-                  name: cat.name,
-                  description: cat.description || ''
-                }));
-              } else if (Array.isArray(categoriesData)) {
-                categoriesList = categoriesData.map((cat: any) => ({
-                  id: String(cat._id || cat.id),
-                  name: cat.name,
-                  description: cat.description || ''
-                }));
-              }
-            }
-            
-            // setCategories(categoriesList); // Removed unused categories
-            console.log('Categories loaded:', categoriesList.length);
+            // Categories are not needed for POS functionality
+
           } catch (categoryError) {
             console.warn('Failed to fetch categories:', categoryError);
-            // Extract unique categories from products as fallback
-            const uniqueCategories = Array.from(new Set(mappedProducts.map((p: any) => p.category)))
-              .filter(Boolean)
-              .map((name, index) => ({ id: String(index + 1), name: String(name), description: '' }));
-            // setCategories(uniqueCategories); // Removed unused categories
-            console.log('Using categories from products:', uniqueCategories);
+            // Categories are not needed for POS functionality
+
           }
           
           setProducts(mappedProducts);
@@ -330,8 +289,7 @@ const POSScreen: React.FC = () => {
         
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
-          console.log('Products response:', productsData);
-          
+
           // Handle test server response format
           let productsList = [];
           if (productsData.data && Array.isArray(productsData.data)) {
@@ -349,39 +307,10 @@ const POSScreen: React.FC = () => {
             stock_quantity: product.stock_quantity || product.stock || 0,
             barcode: product.barcode || '' // Ensure barcode is always a string
           }));
-          
-          console.log('Mapped products:', mappedProducts);
-          console.log('Sample product:', mappedProducts[0]);
-          
-          // Fetch categories
-          try {
-            const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
 
-            let categoriesList = [];
-            if (categoriesResponse.ok) {
-              const categoriesData = await categoriesResponse.json();
-              console.log('Categories response:', categoriesData);
-              
-              if (categoriesData.data && Array.isArray(categoriesData.data)) {
-                categoriesList = categoriesData.data;
-              } else if (Array.isArray(categoriesData)) {
-                categoriesList = categoriesData;
-              }
-            }
-            
-            setProducts(mappedProducts);
-            // setCategories(categoriesList); // Removed unused categories
-            return;
-          } catch (categoryError) {
-            console.warn('Failed to fetch categories:', categoryError);
-            setProducts(mappedProducts);
-            return;
-          }
+          // Categories are not needed for POS functionality
+          setProducts(mappedProducts);
+          return;
         }
       } catch (testServerError) {
         console.warn('Test server not available, trying paginated API:', testServerError);
@@ -410,17 +339,7 @@ const POSScreen: React.FC = () => {
         currentPage++;
       } while (currentPage <= totalPages);
       
-      // Fetch categories
-      const categoriesResponse = await fetch('http://localhost:5002/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (allProducts.length > 0 && categoriesResponse.ok) {
-        const categoriesData = await categoriesResponse.json();
-        
+      if (allProducts.length > 0) {
         // Map products to correct structure
         const productsList = allProducts.map((product: any) => ({
           ...product,
@@ -430,13 +349,9 @@ const POSScreen: React.FC = () => {
           barcode: product.barcode || '' // Ensure barcode is always a string
         }));
         
-        // Handle categories
-        const categoriesList = categoriesData.data && Array.isArray(categoriesData.data) 
-          ? categoriesData.data 
-          : [];
+        // Categories are not needed for POS functionality
         
         setProducts(productsList);
-        // setCategories(categoriesList); // Removed unused categories
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -453,41 +368,40 @@ const POSScreen: React.FC = () => {
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    console.log('🔑 Key pressed:', e.key, 'Search results:', searchResults.length, 'Selected index:', selectedIndex);
-    
+
     switch (e.key) {
       case 'Enter':
         e.preventDefault();
-        console.log('⏎ Enter pressed - selecting product at index:', selectedIndex);
+
         if (searchResults.length > 0 && selectedIndex >= 0 && selectedIndex < searchResults.length) {
           selectProduct(searchResults[selectedIndex]);
         }
         break;
       case 'ArrowDown':
         e.preventDefault();
-        console.log('⬇️ Arrow down pressed');
+
         if (searchResults.length > 0) {
           setSelectedIndex(prev => {
             const newIndex = prev < searchResults.length - 1 ? prev + 1 : 0;
-            console.log('⬇️ New selected index:', newIndex);
+
             return newIndex;
           });
         }
         break;
       case 'ArrowUp':
         e.preventDefault();
-        console.log('⬆️ Arrow up pressed');
+
         if (searchResults.length > 0) {
           setSelectedIndex(prev => {
             const newIndex = prev > 0 ? prev - 1 : searchResults.length - 1;
-            console.log('⬆️ New selected index:', newIndex);
+
             return newIndex;
           });
         }
         break;
       case 'Escape':
         e.preventDefault();
-        console.log('🚫 Escape pressed - clearing search');
+
         setSearchTerm('');
         setSearchResults([]);
         setSelectedIndex(-1);
@@ -496,43 +410,38 @@ const POSScreen: React.FC = () => {
   };
 
   const addToCart = (product: Product) => {
-    console.log('Adding product to cart:', product);
-    console.log('Current cart:', cart);
-    
+
     const availableStock = product.stock_quantity || product.stock || 0;
-    console.log('Available stock:', availableStock);
-    
+
     if (availableStock <= 0) {
-      console.log('Product out of stock, showing alert');
+
       alert('Product is out of stock!');
       return;
     }
 
     const existingItem = cart.find(item => item.product.id === product.id);
-    console.log('Existing item in cart:', existingItem);
-    
+
     if (existingItem) {
       if (existingItem.quantity >= availableStock) {
-        console.log('Cannot add more, showing alert');
+
         alert(`Cannot add more. Only ${availableStock} items available.`);
         return;
       }
-      
-      console.log('Updating existing item quantity');
+
       setCart(cart.map(item =>
         item.product.id === product.id
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * product.price }
           : item
       ));
     } else {
-      console.log('Adding new item to cart');
+
       setCart([...cart, { 
         product, 
         quantity: 1, 
         subtotal: product.price 
       }]);
     }
-    console.log('Cart update completed');
+
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -604,8 +513,7 @@ const POSScreen: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Sale result:', result);
-        
+
         const { soldItems, data } = result;
         const summary = data?.summary;
         
@@ -626,7 +534,7 @@ const POSScreen: React.FC = () => {
         }
 
         // Dispatch event with summary and sold items so dashboards can update
-        console.log('📡 Dispatching inventory update event with:', { summary, soldItems });
+
         window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
           detail: { summary, soldItems } 
         }));
@@ -674,7 +582,7 @@ const POSScreen: React.FC = () => {
       }
 
       // Dispatch event with summary and sold items so dashboards can update
-      console.log('📡 Dispatching inventory update event with:', { summary, soldItems });
+
       window.dispatchEvent(new CustomEvent('inventoryUpdated', { 
         detail: { summary, soldItems } 
       }));
@@ -699,7 +607,6 @@ const POSScreen: React.FC = () => {
   };
 
   const { subtotal, total } = getCartTotals();
-
 
   if (loading) {
     return (

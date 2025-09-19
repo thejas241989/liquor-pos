@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Download, FileText, AlertTriangle, CheckCircle, Package, DollarSign } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -30,7 +30,7 @@ interface ReconciliationSummary {
   notes: string;
 }
 
-interface StockReconciliationReport {
+interface StockReconciliationData {
   summary: ReconciliationSummary;
   items: ReconciliationItem[];
 }
@@ -40,9 +40,9 @@ const StockReconciliationReport: React.FC = () => {
   const [reconciliationId, setReconciliationId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [reportData, setReportData] = useState<StockReconciliationReport | null>(null);
+  const [reportData, setReportData] = useState<StockReconciliationData | null>(null);
 
-  const generateReport = async () => {
+  const generateReport = useCallback(async () => {
     if (!reportDate) {
       setError('Please select a date');
       return;
@@ -72,7 +72,7 @@ const StockReconciliationReport: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [reportDate, reconciliationId]);
 
   const exportToCSV = () => {
     if (!reportData) return;
@@ -142,7 +142,7 @@ const StockReconciliationReport: React.FC = () => {
 
   useEffect(() => {
     generateReport();
-  }, []);
+  }, [generateReport]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">

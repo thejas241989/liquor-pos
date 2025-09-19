@@ -17,8 +17,6 @@ import ReportsPage from './components/reports/ReportsPage';
 import ReportDetail from './components/reports/ReportDetail';
 import UsersManagement from './components/users/UsersManagement';
 import UserForm from './components/users/UserForm';
-import ApiDebug from './components/debug/ApiDebug';
-import DashboardTest from './components/debug/DashboardTest';
 
 import './App.css';
 
@@ -117,9 +115,6 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* Debug Routes */}
-            <Route path="/debug" element={<ApiDebug />} />
-            <Route path="/debug-dashboard" element={<DashboardTest />} />
             
             {/* Default redirect */}
             <Route path="/" element={<Navigate to="/login" replace />} />

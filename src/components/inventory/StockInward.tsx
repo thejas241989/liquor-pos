@@ -126,12 +126,7 @@ const StockInward: React.FC = () => {
   }, [products, searchTerm]);
 
   const addItem = (product: Product) => {
-    console.log('➕ Adding product to stock inward:', {
-      product_id: product._id,
-      product_name: product.name,
-      cost_price: product.cost_price
-    });
-    
+
     const existingItem = items.find(item => item.product_id === product._id);
     if (existingItem) {
       setItems(items.map(item =>
@@ -288,8 +283,6 @@ const StockInward: React.FC = () => {
         })
       });
 
-      console.log('📦 Stock inward response:', response);
-
       if (response.message) {
         const { failed, summary } = response.data;
         
@@ -305,7 +298,7 @@ const StockInward: React.FC = () => {
         }
         
         if (summary.failed_count > 0) {
-          console.log('❌ Failed items:', failed);
+
           const errorMessages = failed.map((f: any) => f.error).join(', ');
           setError(`Some items failed to process: ${errorMessages}`);
         }
@@ -316,7 +309,7 @@ const StockInward: React.FC = () => {
           setError(`All items failed to process: ${errorMessages}`);
         }
       } else {
-        console.log('❌ No success message in response:', response);
+
         setError('Failed to record stock inward - no success message');
       }
     } catch (error) {

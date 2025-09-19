@@ -53,8 +53,7 @@ const ProductForm: React.FC = () => {
 
         if (response.ok) {
           const json = await response.json();
-          console.log('Categories loaded in ProductForm:', json);
-          
+
           // Map MongoDB categories to correct structure
           const categoriesList = json.data ? json.data.map((cat: any) => ({
             id: String(cat._id || cat.id),
@@ -132,8 +131,6 @@ const ProductForm: React.FC = () => {
         barcode: form.barcode
       };
 
-      console.log('Saving product with payload:', payload);
-
       if (id) {
         // Update existing product
         const res = await fetch(`http://localhost:5002/api/products/test`, {
@@ -145,7 +142,7 @@ const ProductForm: React.FC = () => {
         });
         
         if (res.ok) {
-          console.log('Product updated successfully');
+
         } else {
           const errorData = await res.json();
           console.error('Update failed:', errorData);
@@ -163,8 +160,7 @@ const ProductForm: React.FC = () => {
         });
         
         if (res.ok) {
-          const responseData = await res.json();
-          console.log('Product created successfully:', responseData);
+          // Product created successfully
         } else {
           const errorData = await res.json();
           console.error('Create failed:', errorData);
