@@ -8,7 +8,7 @@ const { connectDB } = require('./config/mongodb');
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 
 // Connect to MongoDB
 connectDB();
@@ -27,6 +27,7 @@ const reportsRoutes = require('./routes/reports');
 const usersRoutes = require('./routes/users');
 const categoriesRoutes = require('./routes/categories');
 const stockManagementRoutes = require('./routes/stockManagement');
+const optimizedReportsRoutes = require('./routes/optimizedReports');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -37,6 +38,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/stock', stockManagementRoutes);
+app.use('/api/optimized-reports', optimizedReportsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

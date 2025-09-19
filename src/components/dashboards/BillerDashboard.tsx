@@ -12,6 +12,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
+import AdminNavigation from '../common/AdminNavigation';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { useInventorySummary } from '../../hooks/useDashboard';
 
@@ -98,6 +99,8 @@ const BillerDashboard: React.FC = () => {
         icon={<Receipt className="w-8 h-8 text-green-600" />}
         actions={getHeaderActions()}
       />
+
+      <AdminNavigation currentPage="pos" />
 
       {/* Dashboard Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

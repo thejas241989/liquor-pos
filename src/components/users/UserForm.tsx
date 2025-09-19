@@ -4,6 +4,7 @@ import { ArrowLeft, Save, X, User, Mail, Lock, Shield, Activity, AlertCircle, Ch
 import apiService from '../../services/api';
 import { useToast } from '../common/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import AdminNavigation from '../common/AdminNavigation';
 
 const roles = [
   { value: 'admin', label: 'Administrator', description: 'Full system access' },
@@ -222,6 +223,8 @@ const UserForm: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      <AdminNavigation currentPage="users" />
+      
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-6">

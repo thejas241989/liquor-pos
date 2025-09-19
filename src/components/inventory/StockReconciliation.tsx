@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, AlertTriangle, Package, Calendar, User, FileText, Search } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
+import AdminNavigation from '../common/AdminNavigation';
 
 interface Product {
   _id: string;
@@ -213,6 +214,8 @@ const StockReconciliation: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      <AdminNavigation currentPage="inventory" />
+      
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Stock Reconciliation</h1>

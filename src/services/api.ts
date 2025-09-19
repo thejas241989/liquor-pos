@@ -150,10 +150,23 @@ class ApiService {
   }
 
   // Sales endpoints
-  async processSale(items: { id: string | number; quantity: number }[]) {
+  async processSale(items: { id: string | number; quantity: number }[], paymentData?: any) {
+    const payload: any = { items };
+    
+    if (paymentData) {
+      payload.payment_method = paymentData.payment_method;
+      payload.payment_details = {
+        cash_received: paymentData.cash_received,
+        change_returned: paymentData.change_returned,
+        upi_reference: paymentData.upi_reference,
+        credit_customer: paymentData.credit_customer,
+        credit_due_date: paymentData.credit_due_date
+      };
+    }
+    
     return this.request('/sales', {
       method: 'POST',
-      body: JSON.stringify({ items }),
+      body: JSON.stringify(payload),
     });
   }
 

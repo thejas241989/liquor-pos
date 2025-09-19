@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { validateUserCreation, validateObjectId, validateRateLimit } = require('../middleware/validation');
 
 const router = express.Router();
 

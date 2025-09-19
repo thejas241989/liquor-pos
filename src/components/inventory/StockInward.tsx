@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Package, AlertCircle, CheckCircle, X, Search, Edit, Trash2 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
+import AdminNavigation from '../common/AdminNavigation';
 
 interface Product {
   _id: string;
@@ -332,6 +333,8 @@ const StockInward: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      <AdminNavigation currentPage="inventory" />
+      
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Stock Inward Management</h1>

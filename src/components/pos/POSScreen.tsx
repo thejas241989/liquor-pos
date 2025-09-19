@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ShoppingCart, Search, BarChart3, Shield, Package, FileText, Settings } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
+import AdminNavigation from '../common/AdminNavigation';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { apiService } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import PaymentModal from './PaymentModal';
 
 interface Product {
   id: string;
@@ -43,9 +45,9 @@ const POSScreen: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const TAX_RATE = 0.1; // 10% tax
 
   const getHeaderActions = () => {
     const navigationItems = [
@@ -188,14 +190,25 @@ const POSScreen: React.FC = () => {
 
   // Ensure search input stays focused
   useEffect(() => {
-    const handleClick = () => {
+    const handleClick = (event: MouseEvent) => {
+      // Don't focus search input if payment modal is open
+      if (showPaymentModal) {
+        return;
+      }
+      
+      // Don't focus search input if clicking on modal elements
+      const target = event.target as Element;
+      if (target && (target.closest('#payment-modal') || target.closest('.modal'))) {
+        return;
+      }
+      
       if (searchInputRef.current) {
         searchInputRef.current.focus();
       }
     };
 
     // Focus input when component mounts or when search results change
-    if (searchInputRef.current) {
+    if (searchInputRef.current && !showPaymentModal) {
       searchInputRef.current.focus();
     }
 
@@ -205,7 +218,7 @@ const POSScreen: React.FC = () => {
     return () => {
       document.removeEventListener('click', handleClick);
     };
-  }, [searchResults]);
+  }, [searchResults, showPaymentModal]);
 
 
   const fetchData = async () => {
@@ -553,28 +566,27 @@ const POSScreen: React.FC = () => {
 
   const getCartTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-    const tax = subtotal * TAX_RATE;
-    const total = subtotal + tax;
-    return { subtotal, tax, total };
+    const total = subtotal;
+    return { subtotal, total };
   };
 
-  const completeSale = async () => {
+  const completeSale = () => {
     if (cart.length === 0) {
       alert('Cart is empty!');
       return;
     }
+    setShowPaymentModal(true);
+  };
 
-    const { total } = getCartTotals();
-    const saleItems = cart.map(item => `${item.quantity}x ${item.product.name}`).join(', ');
-
-    if (!window.confirm(`Complete sale for ${formatCurrency(total)}?\nItems: ${saleItems}`)) return;
-
+  const handlePaymentComplete = async (paymentData: any) => {
     try {
       // Build items payload (use product id and quantity)
       const itemsPayload = cart.map(item => ({ 
         id: item.product.id, // Keep as string for MongoDB ObjectId compatibility
         quantity: item.quantity 
       }));
+
+      console.log('Processing sale with items:', itemsPayload, 'and payment:', paymentData);
 
       // Try test server format first
       const response = await fetch('http://localhost:5002/api/sales', {
@@ -583,7 +595,11 @@ const POSScreen: React.FC = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ items: itemsPayload })
+        body: JSON.stringify({ 
+          items: itemsPayload,
+          payment_method: paymentData.payment_method,
+          payment_details: paymentData
+        })
       });
 
       if (response.ok) {
@@ -615,13 +631,24 @@ const POSScreen: React.FC = () => {
           detail: { summary, soldItems } 
         }));
 
-        alert('Sale completed successfully!');
+        // Show success message based on payment method
+        let successMessage = 'Sale completed successfully!';
+        if (paymentData.payment_method === 'cash' && paymentData.change_returned > 0) {
+          successMessage += ` Change to return: ${formatCurrency(paymentData.change_returned)}`;
+        } else if (paymentData.payment_method === 'credit') {
+          successMessage += ' Credit sale recorded.';
+        } else if (paymentData.payment_method === 'upi') {
+          successMessage += ' UPI payment completed.';
+        }
+
+        alert(successMessage);
+        setShowPaymentModal(false);
         clearCart();
         return;
       }
 
       // Fallback to apiService if test server format fails
-      const result = await apiService.processSale(itemsPayload);
+      const result = await apiService.processSale(itemsPayload, paymentData);
 
       if (!result.success) {
         alert(`Failed to complete sale: ${result.error}`);
@@ -652,7 +679,18 @@ const POSScreen: React.FC = () => {
         detail: { summary, soldItems } 
       }));
 
-      alert('Sale completed successfully!');
+      // Show success message based on payment method
+      let successMessage = 'Sale completed successfully!';
+      if (paymentData.payment_method === 'cash' && paymentData.change_returned > 0) {
+        successMessage += ` Change to return: ${formatCurrency(paymentData.change_returned)}`;
+      } else if (paymentData.payment_method === 'credit') {
+        successMessage += ' Credit sale recorded.';
+      } else if (paymentData.payment_method === 'upi') {
+        successMessage += ' UPI payment completed.';
+      }
+
+      alert(successMessage);
+      setShowPaymentModal(false);
       clearCart();
     } catch (error) {
       console.error('Error completing sale:', error);
@@ -660,7 +698,7 @@ const POSScreen: React.FC = () => {
     }
   };
 
-  const { subtotal, tax, total } = getCartTotals();
+  const { subtotal, total } = getCartTotals();
 
 
   if (loading) {
@@ -686,6 +724,8 @@ const POSScreen: React.FC = () => {
         icon={<ShoppingCart className="w-8 h-8 text-green-600" />}
         actions={getHeaderActions()}
       />
+
+      <AdminNavigation currentPage="pos" />
 
       {/* Debug info removed as requested */}
 
@@ -839,10 +879,6 @@ const POSScreen: React.FC = () => {
                 <span>Subtotal:</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between mb-2">
-                <span>Tax (10%):</span>
-                <span>{formatCurrency(tax)}</span>
-              </div>
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>Total:</span>
                 <span>{formatCurrency(total)}</span>
@@ -859,6 +895,14 @@ const POSScreen: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onComplete={handlePaymentComplete}
+        totalAmount={total}
+      />
     </div>
   );
 };

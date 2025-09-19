@@ -54,6 +54,20 @@ const ReportsPage: React.FC = () => {
   };
   const getHeaderActions = () => (
     <>
+      <button 
+        onClick={() => navigate('/pos')}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        <DollarSign className="w-4 h-4" />
+        Go to POS
+      </button>
+      <button 
+        onClick={() => navigate('/inventory')}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        <Package className="w-4 h-4" />
+        Inventory
+      </button>
       <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
         <Download className="w-4 h-4" />
         Export All
@@ -89,9 +103,9 @@ const ReportsPage: React.FC = () => {
               <div className="font-medium text-gray-900">Daily Sales Report</div>
               <div className="text-sm text-gray-600">View today's sales performance</div>
             </button>
-            <button onClick={() => navigate('/reports/monthly-sales')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-              <div className="font-medium text-gray-900">Monthly Sales Summary</div>
-              <div className="text-sm text-gray-600">Monthly revenue and trends</div>
+            <button onClick={() => navigate('/reports/bill-wise')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <div className="font-medium text-gray-900">Bill-wise Report</div>
+              <div className="text-sm text-gray-600">Detailed bill information with payment details</div>
             </button>
             <button onClick={() => navigate('/reports/top-products')} className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <div className="font-medium text-gray-900">Top Selling Products</div>
@@ -199,7 +213,7 @@ const ReportsPage: React.FC = () => {
             >
               <option value="">Select Report Type</option>
               <option value="daily-sales">Daily Sales Report</option>
-              <option value="monthly-sales">Monthly Sales</option>
+              <option value="bill-wise">Bill-wise Report</option>
               <option value="top-products">Top Products</option>
               <option value="current-stock">Current Stock</option>
               <option value="revenue-summary">Revenue Summary</option>
@@ -253,6 +267,59 @@ const ReportsPage: React.FC = () => {
               Generate Report
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Actions Footer */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-green-600" />
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <button 
+            onClick={() => navigate('/pos')}
+            className="flex items-center gap-3 p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors text-left"
+          >
+            <DollarSign className="w-6 h-6 text-purple-600" />
+            <div>
+              <div className="font-medium text-purple-900">Start Billing</div>
+              <div className="text-sm text-purple-700">Go to Point of Sale</div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/inventory')}
+            className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-left"
+          >
+            <Package className="w-6 h-6 text-green-600" />
+            <div>
+              <div className="font-medium text-green-900">Stock Management</div>
+              <div className="text-sm text-green-700">Manage inventory levels</div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/products')}
+            className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-left"
+          >
+            <Package className="w-6 h-6 text-indigo-600" />
+            <div>
+              <div className="font-medium text-indigo-900">Product Settings</div>
+              <div className="text-sm text-indigo-700">Configure products</div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/admin')}
+            className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-left"
+          >
+            <TrendingUp className="w-6 h-6 text-blue-600" />
+            <div>
+              <div className="font-medium text-blue-900">Back to Dashboard</div>
+              <div className="text-sm text-blue-700">Return to main view</div>
+            </div>
+          </button>
         </div>
       </div>
     </div>

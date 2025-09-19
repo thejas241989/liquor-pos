@@ -9,7 +9,6 @@ interface SaleCompleteModalProps {
     itemCount: number;
     total: number;
     subtotal: number;
-    tax: number;
     items: Array<{
       name: string;
       quantity: number;
@@ -61,10 +60,6 @@ const SaleCompleteModal: React.FC<SaleCompleteModalProps> = ({ isOpen, onClose, 
             <div className="flex justify-between text-sm">
               <span>Subtotal:</span>
               <span>{formatCurrency(saleData.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Tax (10%):</span>
-              <span>{formatCurrency(saleData.tax)}</span>
             </div>
             <div className="flex justify-between font-semibold text-lg border-t pt-1">
               <span>Total:</span>

@@ -3,6 +3,7 @@ const { body, validationResult, query } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const { verifyToken, requireManager, requireBiller } = require('../middleware/auth');
+const { validateProductCreation, validateObjectId, validatePagination, validateRateLimit } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -37,7 +38,6 @@ router.get('/test', async (req, res) => {
         brand: product.brand || '',
         alcohol_content: product.alcohol_percentage,
         min_stock_level: product.min_stock_level,
-        tax_percentage: product.tax_percentage,
         status: product.status
       };
 
@@ -430,7 +430,7 @@ router.post('/', [
 
     const {
       name, category_id, subcategory_id, barcode, price, cost_price,
-      stock_quantity = 0, min_stock_level = 10, tax_percentage = 0,
+      stock_quantity = 0, min_stock_level = 10,
       brand, volume, alcohol_percentage, description
     } = req.body;
 
@@ -457,7 +457,6 @@ router.post('/', [
       cost_price: cost_price ? Number(cost_price) : undefined,
       stock_quantity: Number(stock_quantity) || 0,
       min_stock_level: Number(min_stock_level) || 10,
-      tax_percentage: Number(tax_percentage) || 0,
       volume: volume || '',
       brand: brand || '',
       alcohol_percentage: alcohol_percentage ? Number(alcohol_percentage) : undefined,
@@ -526,7 +525,7 @@ router.put('/:id', [
     const updateFields = {};
     const allowedFields = [
       'name', 'category_id', 'subcategory_id', 'barcode', 'price', 'cost_price',
-      'stock_quantity', 'min_stock_level', 'tax_percentage', 'brand', 'volume',
+      'stock_quantity', 'min_stock_level', 'brand', 'volume',
       'alcohol_percentage', 'description', 'status'
     ];
 

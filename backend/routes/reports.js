@@ -831,6 +831,79 @@ router.get('/monthly-sales', [
   return router.handle(req, res);
 });
 
+// Bill-wise Report
+router.get('/bill-wise', [
+  verifyToken,
+  query('date').optional().isISO8601().withMessage('Date must be a valid date (YYYY-MM-DD)')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation errors', errors: errors.array() });
+    }
+
+    const { date } = req.query;
+    const reportDate = date ? new Date(date) : new Date();
+    reportDate.setHours(0, 0, 0, 0);
+    
+    const nextDay = new Date(reportDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    console.log('🔍 Fetching bill-wise report for date:', reportDate.toISOString());
+
+    // Get all sales for the specified date with populated data
+    const bills = await Sale.find({
+      sale_date: {
+        $gte: reportDate,
+        $lt: nextDay
+      }
+    })
+    .populate('biller_id', 'username')
+    .populate('items.product_id', 'name barcode')
+    .sort({ sale_date: -1 })
+    .lean();
+
+    console.log(`📊 Found ${bills.length} bills for ${reportDate.toISOString().split('T')[0]}`);
+
+    // Calculate summary statistics
+    const summary = {
+      total_bills: bills.length,
+      total_amount: bills.reduce((sum, bill) => sum + bill.total_amount, 0),
+      total_subtotal: bills.reduce((sum, bill) => sum + bill.subtotal, 0),
+      total_discount: bills.reduce((sum, bill) => sum + bill.discount_amount, 0),
+      payment_methods: {
+        cash: bills.filter(bill => bill.payment_method === 'cash').length,
+        upi: bills.filter(bill => bill.payment_method === 'upi').length,
+        credit: bills.filter(bill => bill.payment_method === 'credit').length,
+        mixed: bills.filter(bill => bill.payment_method === 'mixed').length
+      },
+      payment_status: {
+        paid: bills.filter(bill => bill.payment_status === 'paid').length,
+        pending: bills.filter(bill => bill.payment_status === 'pending').length,
+        partial: bills.filter(bill => bill.payment_status === 'partial').length
+      }
+    };
+
+    res.json({
+      success: true,
+      data: {
+        bills,
+        summary,
+        date: reportDate.toISOString().split('T')[0],
+        generated_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Bill-wise report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate bill-wise report',
+      error: error.message
+    });
+  }
+});
+
 // Biller Performance Report
 router.get('/biller-performance', [
   verifyToken,
@@ -1041,13 +1114,35 @@ router.get('/day-wise-sales', [
       });
     });
 
-    const reportData = dailyStocks.map((stock, index) => {
+    // Group products by category
+    const categoryMap = new Map();
+    let globalSiNo = 1;
+
+    dailyStocks.forEach((stock) => {
       const sales = salesMap.get(stock.product_id.toString()) || { total_sold: 0, total_sales_amount: 0 };
+      const categoryName = stock.category.name;
       
-      return {
-        si_no: index + 1,
+      if (!categoryMap.has(categoryName)) {
+        categoryMap.set(categoryName, {
+          category_name: categoryName,
+          category_summary: {
+            total_products: 0,
+            total_opening_stock: 0,
+            total_stock_inward: 0,
+            total_sold_quantity: 0,
+            total_closing_stock: 0,
+            total_sales_amount: 0,
+            total_stock_value: 0
+          },
+          products: []
+        });
+      }
+
+      const category = categoryMap.get(categoryName);
+      const productData = {
+        si_no: globalSiNo++,
         product_name: stock.product.name,
-        category_name: stock.category.name,
+        category_name: categoryName,
         opening_stock: stock.opening_stock,
         stock_inward: stock.stock_inward,
         sold_quantity: sales.total_sold,
@@ -1055,17 +1150,34 @@ router.get('/day-wise-sales', [
         total_sales_amount: sales.total_sales_amount,
         stock_value: stock.stock_value
       };
+
+      category.products.push(productData);
+      
+      // Update category summary
+      category.category_summary.total_products++;
+      category.category_summary.total_opening_stock += stock.opening_stock;
+      category.category_summary.total_stock_inward += stock.stock_inward;
+      category.category_summary.total_sold_quantity += sales.total_sold;
+      category.category_summary.total_closing_stock += stock.closing_stock;
+      category.category_summary.total_sales_amount += sales.total_sales_amount;
+      category.category_summary.total_stock_value += stock.stock_value;
     });
 
-    // Calculate summary
+    // Convert map to array and sort categories by name
+    const categories = Array.from(categoryMap.values()).sort((a, b) => 
+      a.category_name.localeCompare(b.category_name)
+    );
+
+    // Calculate overall summary
     const summary = {
-      total_products: reportData.length,
-      total_opening_stock: reportData.reduce((sum, item) => sum + item.opening_stock, 0),
-      total_stock_inward: reportData.reduce((sum, item) => sum + item.stock_inward, 0),
-      total_sold_quantity: reportData.reduce((sum, item) => sum + item.sold_quantity, 0),
-      total_closing_stock: reportData.reduce((sum, item) => sum + item.closing_stock, 0),
-      total_sales_amount: reportData.reduce((sum, item) => sum + item.total_sales_amount, 0),
-      total_stock_value: reportData.reduce((sum, item) => sum + item.stock_value, 0)
+      total_categories: categories.length,
+      total_products: categories.reduce((sum, cat) => sum + cat.category_summary.total_products, 0),
+      total_opening_stock: categories.reduce((sum, cat) => sum + cat.category_summary.total_opening_stock, 0),
+      total_stock_inward: categories.reduce((sum, cat) => sum + cat.category_summary.total_stock_inward, 0),
+      total_sold_quantity: categories.reduce((sum, cat) => sum + cat.category_summary.total_sold_quantity, 0),
+      total_closing_stock: categories.reduce((sum, cat) => sum + cat.category_summary.total_closing_stock, 0),
+      total_sales_amount: categories.reduce((sum, cat) => sum + cat.category_summary.total_sales_amount, 0),
+      total_stock_value: categories.reduce((sum, cat) => sum + cat.category_summary.total_stock_value, 0)
     };
 
     res.json({
@@ -1076,7 +1188,7 @@ router.get('/day-wise-sales', [
         end_date: new Date(endDate.getTime() - 1).toISOString().split('T')[0],
         is_date_range: !date,
         summary,
-        products: reportData
+        categories
       }
     });
 

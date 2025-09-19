@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, Calendar, TrendingUp, Package, DollarSign } from 'lucide-react';
+import { Download, Calendar, TrendingUp, Package, DollarSign, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 
 interface DayWiseSalesReportData {
   report_date: string;
@@ -7,6 +7,7 @@ interface DayWiseSalesReportData {
   end_date?: string;
   is_date_range?: boolean;
   summary: {
+    total_categories: number;
     total_products: number;
     total_opening_stock: number;
     total_stock_inward: number;
@@ -15,16 +16,28 @@ interface DayWiseSalesReportData {
     total_sales_amount: number;
     total_stock_value: number;
   };
-  products: Array<{
-    si_no: number;
-    product_name: string;
+  categories: Array<{
     category_name: string;
-    opening_stock: number;
-    stock_inward: number;
-    sold_quantity: number;
-    closing_stock: number;
-    total_sales_amount: number;
-    stock_value: number;
+    category_summary: {
+      total_products: number;
+      total_opening_stock: number;
+      total_stock_inward: number;
+      total_sold_quantity: number;
+      total_closing_stock: number;
+      total_sales_amount: number;
+      total_stock_value: number;
+    };
+    products: Array<{
+      si_no: number;
+      product_name: string;
+      category_name: string;
+      opening_stock: number;
+      stock_inward: number;
+      sold_quantity: number;
+      closing_stock: number;
+      total_sales_amount: number;
+      stock_value: number;
+    }>;
   }>;
 }
 
@@ -32,10 +45,49 @@ const DayWiseSalesReport: React.FC = () => {
   const [reportData, setReportData] = useState<DayWiseSalesReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [showAllExpanded, setShowAllExpanded] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [useDateRange, setUseDateRange] = useState(false);
+
+  // Helper functions for category management
+  const toggleCategory = (categoryName: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryName)) {
+      newExpanded.delete(categoryName);
+    } else {
+      newExpanded.add(categoryName);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
+  const toggleAllCategories = () => {
+    if (showAllExpanded) {
+      setExpandedCategories(new Set());
+      setShowAllExpanded(false);
+    } else {
+      const allCategories = new Set(reportData?.categories.map(cat => cat.category_name) || []);
+      setExpandedCategories(allCategories);
+      setShowAllExpanded(true);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  // Filter categories based on search
+  const filteredCategories = reportData?.categories.filter(category =>
+    category.category_name.toLowerCase().includes(categoryFilter.toLowerCase())
+  ) || [];
 
   const generateReport = useCallback(async () => {
     if (!useDateRange && !reportDate) {
@@ -107,9 +159,10 @@ const DayWiseSalesReport: React.FC = () => {
     if (!reportData) return;
 
     const csvContent = [
-      ['Day-wise Sales Report', reportData.report_date],
+      ['Day-wise Sales Report (Categorized)', reportData.report_date],
       [''],
-      ['Summary'],
+      ['Overall Summary'],
+      ['Total Categories', reportData.summary.total_categories],
       ['Total Products', reportData.summary.total_products],
       ['Total Opening Stock', reportData.summary.total_opening_stock],
       ['Total Stock Inward', reportData.summary.total_stock_inward],
@@ -118,19 +171,34 @@ const DayWiseSalesReport: React.FC = () => {
       ['Total Sales Amount', reportData.summary.total_sales_amount],
       ['Total Stock Value', reportData.summary.total_stock_value],
       [''],
-      ['Product Details'],
+      ['Category-wise Summary'],
+      ['Category Name', 'Products', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value'],
+      ...reportData.categories.map(category => [
+        category.category_name,
+        category.category_summary.total_products,
+        category.category_summary.total_opening_stock,
+        category.category_summary.total_stock_inward,
+        category.category_summary.total_sold_quantity,
+        category.category_summary.total_closing_stock,
+        category.category_summary.total_sales_amount,
+        category.category_summary.total_stock_value
+      ]),
+      [''],
+      ['Detailed Product Data'],
       ['SI No', 'Product Name', 'Category', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value'],
-      ...reportData.products.map(product => [
-        product.si_no,
-        product.product_name,
-        product.category_name,
-        product.opening_stock,
-        product.stock_inward,
-        product.sold_quantity,
-        product.closing_stock,
-        product.total_sales_amount,
-        product.stock_value
-      ])
+      ...reportData.categories.flatMap(category => 
+        category.products.map(product => [
+          product.si_no,
+          product.product_name,
+          product.category_name,
+          product.opening_stock,
+          product.stock_inward,
+          product.sold_quantity,
+          product.closing_stock,
+          product.total_sales_amount,
+          product.stock_value
+        ])
+      )
     ].map(row => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -143,13 +211,6 @@ const DayWiseSalesReport: React.FC = () => {
     a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
-    }).format(amount);
   };
 
   return (
@@ -262,7 +323,19 @@ const DayWiseSalesReport: React.FC = () => {
       {reportData && !loading && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Filter className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Categories</p>
+                  <p className="text-2xl font-bold text-gray-900">{reportData?.summary.total_categories || 0}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -312,50 +385,123 @@ const DayWiseSalesReport: React.FC = () => {
             </div>
           </div>
 
-          {/* Detailed Table */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Product Details</h2>
-              <p className="text-sm text-gray-600">
-                {reportData?.is_date_range 
-                  ? `Report Period: ${new Date(reportData.start_date!).toLocaleDateString()} to ${new Date(reportData.end_date!).toLocaleDateString()}`
-                  : `Report Date: ${new Date(reportData?.report_date || '').toLocaleDateString()}`
-                }
-              </p>
+          {/* Category Filter and Controls */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Filter Categories</label>
+                <input
+                  type="text"
+                  placeholder="Search categories..."
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={toggleAllCategories}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex items-center gap-2"
+                >
+                  {showAllExpanded ? 'Collapse All' : 'Expand All'}
+                </button>
+              </div>
             </div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SI No</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opening Stock</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Inward</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Quantity</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closing Stock</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {reportData?.products?.map((product) => (
-                    <tr key={product.si_no} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.si_no}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.product_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.opening_stock}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.stock_inward}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.sold_quantity}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.closing_stock}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.total_sales_amount)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.stock_value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          </div>
+
+          {/* Categorized Product Details */}
+          <div className="space-y-4">
+            {filteredCategories.map((category) => (
+              <div key={category.category_name} className="bg-white rounded-lg shadow-sm border border-gray-200">
+                {/* Category Header */}
+                <div 
+                  className="px-6 py-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
+                  onClick={() => toggleCategory(category.category_name)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {expandedCategories.has(category.category_name) ? (
+                        <ChevronDown className="h-5 w-5 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-gray-500" />
+                      )}
+                      <h3 className="text-lg font-semibold text-gray-900">{category.category_name}</h3>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                        {category.category_summary.total_products} products
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div className="text-right">
+                        <div className="text-gray-500">Sales</div>
+                        <div className="font-semibold text-green-600">{formatCurrency(category.category_summary.total_sales_amount)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-gray-500">Stock Value</div>
+                        <div className="font-semibold text-blue-600">{formatCurrency(category.category_summary.total_stock_value)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category Summary */}
+                {expandedCategories.has(category.category_name) && (
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Opening Stock:</span>
+                        <span className="ml-2 font-medium">{category.category_summary.total_opening_stock}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Stock Inward:</span>
+                        <span className="ml-2 font-medium">{category.category_summary.total_stock_inward}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Sold Quantity:</span>
+                        <span className="ml-2 font-medium text-red-600">{category.category_summary.total_sold_quantity}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Closing Stock:</span>
+                        <span className="ml-2 font-medium">{category.category_summary.total_closing_stock}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Products Table */}
+                {expandedCategories.has(category.category_name) && (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SI No</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opening Stock</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Inward</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Quantity</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closing Stock</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Amount</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {category.products.map((product) => (
+                          <tr key={product.si_no} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.si_no}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.product_name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.opening_stock}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.stock_inward}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.sold_quantity}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.closing_stock}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.total_sales_amount)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(product.stock_value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </>
       )}

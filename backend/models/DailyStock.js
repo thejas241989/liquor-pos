@@ -9,8 +9,7 @@ const dailyStockSchema = new mongoose.Schema({
   },
   date: {
     type: Date,
-    required: true,
-    index: true
+    required: true
   },
   opening_stock: {
     type: Number,
@@ -138,6 +137,114 @@ dailyStockSchema.statics.getOrCreateDailyStock = async function(productId, date,
   }
   
   return dailyStock;
+};
+
+// Static method to create daily stock snapshots for all products
+dailyStockSchema.statics.createDailyStockSnapshots = async function(date, userId) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const Product = mongoose.model('Product');
+  const products = await Product.find({ status: 'active' });
+  
+  const snapshots = [];
+  
+  for (const product of products) {
+    // Check if snapshot already exists
+    const existingSnapshot = await this.findOne({
+      product_id: product._id,
+      date: startOfDay
+    });
+    
+    if (!existingSnapshot) {
+      // Get previous day's closing stock as opening stock
+      const previousDay = new Date(startOfDay);
+      previousDay.setDate(previousDay.getDate() - 1);
+      
+      const previousStock = await this.findOne({
+        product_id: product._id,
+        date: previousDay
+      }).sort({ date: -1 });
+      
+      const openingStock = previousStock ? previousStock.closing_stock : product.current_stock || 0;
+      
+      const dailyStock = new this({
+        product_id: product._id,
+        date: startOfDay,
+        opening_stock: openingStock,
+        cost_per_unit: product.cost_price || 0,
+        created_by: userId
+      });
+      
+      await dailyStock.save();
+      snapshots.push(dailyStock);
+    }
+  }
+  
+  return snapshots;
+};
+
+// Static method to update opening stock from previous day's closing stock
+dailyStockSchema.statics.updateOpeningStockFromPreviousDay = async function(date, userId) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const previousDay = new Date(startOfDay);
+  previousDay.setDate(previousDay.getDate() - 1);
+  
+  // Get all daily stock records for the date
+  const dailyStocks = await this.find({ date: startOfDay });
+  
+  const updates = [];
+  
+  for (const dailyStock of dailyStocks) {
+    const previousStock = await this.findOne({
+      product_id: dailyStock.product_id,
+      date: previousDay
+    }).sort({ date: -1 });
+    
+    if (previousStock && dailyStock.opening_stock !== previousStock.closing_stock) {
+      dailyStock.opening_stock = previousStock.closing_stock;
+      await dailyStock.save();
+      updates.push({
+        product_id: dailyStock.product_id,
+        old_opening_stock: dailyStock.opening_stock,
+        new_opening_stock: previousStock.closing_stock
+      });
+    }
+  }
+  
+  return updates;
+};
+
+// Static method to sync current stock with daily snapshot
+dailyStockSchema.statics.syncCurrentStockWithDailySnapshot = async function(date, userId) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const Product = mongoose.model('Product');
+  const dailyStocks = await this.find({ date: startOfDay });
+  
+  const syncs = [];
+  
+  for (const dailyStock of dailyStocks) {
+    const product = await Product.findById(dailyStock.product_id);
+    
+    if (product && product.current_stock !== dailyStock.closing_stock) {
+      const oldStock = product.current_stock;
+      product.current_stock = dailyStock.closing_stock;
+      product.last_stock_update = new Date();
+      await product.save();
+      
+      syncs.push({
+        product_id: product._id,
+        old_current_stock: oldStock,
+        new_current_stock: dailyStock.closing_stock
+      });
+    }
+  }
+  
+  return syncs;
 };
 
 // Static method to update sold quantity from sales

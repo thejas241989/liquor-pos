@@ -22,17 +22,6 @@ const saleItemSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  tax_percentage: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
-  },
-  tax_amount: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
   line_total: {
     type: Number,
     required: true,
@@ -57,17 +46,6 @@ const embeddedSaleItemSchema = new mongoose.Schema({
   unit_price: {
     type: Number,
     required: true,
-    min: 0
-  },
-  tax_percentage: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
-  },
-  tax_amount: {
-    type: Number,
-    default: 0,
     min: 0
   },
   line_total: {
@@ -106,11 +84,6 @@ const saleSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  tax_amount: {
-    type: Number,
-    required: true,
-    min: 0
-  },
   discount_amount: {
     type: Number,
     default: 0,
@@ -123,13 +96,38 @@ const saleSchema = new mongoose.Schema({
   },
   payment_method: {
     type: String,
-    enum: ['cash', 'card', 'upi', 'mixed'],
+    enum: ['cash', 'upi', 'credit', 'mixed'],
     required: true
   },
   payment_status: {
     type: String,
     enum: ['paid', 'pending', 'partial'],
     default: 'paid'
+  },
+  // Enhanced payment details
+  payment_details: {
+    cash_received: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    change_returned: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    upi_reference: {
+      type: String,
+      default: null
+    },
+    credit_customer: {
+      type: String,
+      default: null
+    },
+    credit_due_date: {
+      type: Date,
+      default: null
+    }
   },
   notes: {
     type: String,
@@ -150,22 +148,25 @@ saleSchema.index({ sale_date: 1 });
 saleSchema.index({ payment_method: 1 });
 saleSchema.index({ payment_status: 1 });
 
-// Post-save middleware to update daily stock
+// Post-save middleware to update stock using new StockService
 saleSchema.post('save', async function() {
   try {
-    const DailyStock = require('./DailyStock');
+    const StockService = require('../services/StockService');
     
-    // Update daily stock for each item sold
-    for (const item of this.items) {
-      await DailyStock.updateSoldQuantity(
-        item.product_id,
-        this.sale_date || this.created_at,
-        item.quantity,
-        this.biller_id
-      );
+    // Update stock for each item sold using the new StockService
+    const stockUpdateResult = await StockService.updateStockForSale(
+      this.items,
+      this._id,
+      this.biller_id
+    );
+    
+    if (!stockUpdateResult.success) {
+      console.error('Stock update failed for sale:', this._id, stockUpdateResult.errors);
+    } else {
+      console.log('Stock updated successfully for sale:', this._id);
     }
   } catch (error) {
-    console.error('Error updating daily stock after sale:', error);
+    console.error('Error updating stock after sale:', error);
   }
 });
 

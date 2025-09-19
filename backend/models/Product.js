@@ -42,16 +42,19 @@ const productSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  min_stock_level: {
+  current_stock: {
     type: Number,
     default: 0,
     min: 0
   },
-  tax_percentage: {
+  last_stock_update: {
+    type: Date,
+    default: Date.now
+  },
+  min_stock_level: {
     type: Number,
     default: 0,
-    min: 0,
-    max: 100
+    min: 0
   },
   brand: {
     type: String,
@@ -84,5 +87,74 @@ productSchema.index({ name: 1 });
 productSchema.index({ category_id: 1 });
 productSchema.index({ status: 1 });
 productSchema.index({ stock_quantity: 1 });
+productSchema.index({ current_stock: 1 });
+productSchema.index({ last_stock_update: 1 });
+
+// Instance methods for stock management
+productSchema.methods.updateStock = function(quantity, changeType = 'sale', userId = null) {
+  const oldStock = this.current_stock;
+  this.current_stock = Math.max(0, this.current_stock - quantity);
+  this.last_stock_update = new Date();
+  
+  // Log stock change for audit trail
+  if (userId) {
+    const StockAudit = mongoose.model('StockAudit');
+    StockAudit.create({
+      product_id: this._id,
+      change_type: changeType,
+      old_value: oldStock,
+      new_value: this.current_stock,
+      quantity_changed: quantity,
+      changed_by: userId,
+      timestamp: new Date()
+    }).catch(err => console.error('Stock audit logging failed:', err));
+  }
+  
+  return this.save();
+};
+
+productSchema.methods.addStock = function(quantity, changeType = 'inward', userId = null) {
+  const oldStock = this.current_stock;
+  this.current_stock += quantity;
+  this.last_stock_update = new Date();
+  
+  // Log stock change for audit trail
+  if (userId) {
+    const StockAudit = mongoose.model('StockAudit');
+    StockAudit.create({
+      product_id: this._id,
+      change_type: changeType,
+      old_value: oldStock,
+      new_value: this.current_stock,
+      quantity_changed: quantity,
+      changed_by: userId,
+      timestamp: new Date()
+    }).catch(err => console.error('Stock audit logging failed:', err));
+  }
+  
+  return this.save();
+};
+
+productSchema.methods.setStock = function(newStock, changeType = 'adjustment', userId = null) {
+  const oldStock = this.current_stock;
+  this.current_stock = Math.max(0, newStock);
+  this.last_stock_update = new Date();
+  
+  // Log stock change for audit trail
+  if (userId) {
+    const StockAudit = mongoose.model('StockAudit');
+    StockAudit.create({
+      product_id: this._id,
+      change_type: changeType,
+      old_value: oldStock,
+      new_value: this.current_stock,
+      quantity_changed: this.current_stock - oldStock,
+      changed_by: userId,
+      timestamp: new Date()
+    }).catch(err => console.error('Stock audit logging failed:', err));
+  }
+  
+  return this.save();
+};
 
 module.exports = mongoose.model('Product', productSchema);

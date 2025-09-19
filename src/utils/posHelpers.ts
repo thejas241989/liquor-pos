@@ -23,12 +23,11 @@ export interface Product {
 }
 
 // Calculate cart totals
-export const calculateCartTotals = (cart: CartItem[], taxRate: number = 0.1) => {
+export const calculateCartTotals = (cart: CartItem[]) => {
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const total = subtotal;
   
-  return { subtotal, tax, total };
+  return { subtotal, total };
 };
 
 // Format cart items for display
@@ -72,7 +71,7 @@ export const filterProductsByCategory = (products: Product[], category: string):
 
 // Generate receipt data
 export const generateReceiptData = (cart: CartItem[], customerInfo?: { name?: string; phone?: string }) => {
-  const { subtotal, tax, total } = calculateCartTotals(cart);
+  const { subtotal, total } = calculateCartTotals(cart);
   
   return {
     items: cart.map(item => ({
@@ -83,7 +82,6 @@ export const generateReceiptData = (cart: CartItem[], customerInfo?: { name?: st
       subtotal: item.subtotal
     })),
     subtotal,
-    tax,
     total,
     customer: customerInfo,
     timestamp: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import PageHeader from '../common/PageHeader';
+import AdminNavigation from '../common/AdminNavigation';
 import { apiService } from '../../services/api';
 import DailySalesReport from './DailySalesReport';
 import TopProductsReport from './TopProductsReport';
@@ -8,6 +9,7 @@ import InventoryReport from './InventoryReport';
 import DayWiseSalesReport from './DayWiseSalesReport';
 import StockReconciliationReport from './StockReconciliationReport';
 import BillerPerformanceReport from './BillerPerformanceReport';
+import BillWiseReport from './BillWiseReport';
 
 const ReportDetail: React.FC = () => {
   const { reportId } = useParams<{ reportId: string }>();
@@ -19,7 +21,7 @@ const ReportDetail: React.FC = () => {
 
   const fetchReport = useCallback(async () => {
     // Skip API calls for reports that handle their own data fetching
-    if (reportId === 'day-wise-sales' || reportId === 'stock-reconciliation' || reportId === 'daily-sales') {
+    if (reportId === 'day-wise-sales' || reportId === 'stock-reconciliation' || reportId === 'daily-sales' || reportId === 'bill-wise') {
       setLoading(false);
       setError(null);
       setData(null);
@@ -70,7 +72,8 @@ const ReportDetail: React.FC = () => {
       'inventory': 'Inventory Report',
       'stock-reconciliation': 'Stock Reconciliation Report',
       'current-stock': 'Current Stock Report',
-      'biller-performance': 'Biller Performance Report'
+      'biller-performance': 'Biller Performance Report',
+      'bill-wise': 'Bill-wise Report'
     };
     return titles[reportId] || `Report: ${reportId}`;
   };
@@ -83,7 +86,8 @@ const ReportDetail: React.FC = () => {
       'inventory': 'Current inventory levels and values',
       'stock-reconciliation': 'Physical vs system stock comparison',
       'current-stock': 'Current stock levels and values',
-      'biller-performance': 'Staff performance metrics and analysis'
+      'biller-performance': 'Staff performance metrics and analysis',
+      'bill-wise': 'Detailed bill information with payment details and products'
     };
     return descriptions[reportId] || `View generated data for the ${reportId} report`;
   };
@@ -94,6 +98,8 @@ const ReportDetail: React.FC = () => {
         title={getReportTitle(reportId || '')}
         description={getReportDescription(reportId || '')}
       />
+
+      <AdminNavigation currentPage="reports" />
 
       <div className="mt-6 bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-4">
@@ -123,8 +129,8 @@ const ReportDetail: React.FC = () => {
             {reportId === 'stock-reconciliation' && <StockReconciliationReport />}
             {reportId === 'current-stock' && <InventoryReport data={data} />}
             {reportId === 'biller-performance' && <BillerPerformanceReport data={data} />}
-            {reportId === 'monthly-sales' && <DailySalesReport data={data} />}
-            {!['daily-sales','inventory','day-wise-sales','stock-reconciliation','current-stock','top-products','biller-performance','monthly-sales'].includes(reportId || '') && (
+            {reportId === 'bill-wise' && <BillWiseReport />}
+            {!['daily-sales','inventory','day-wise-sales','stock-reconciliation','current-stock','top-products','biller-performance','bill-wise'].includes(reportId || '') && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Raw Data</h3>
                 <pre className="text-sm whitespace-pre-wrap text-gray-700 bg-white p-4 rounded border overflow-auto max-h-96">
