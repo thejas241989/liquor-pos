@@ -90,6 +90,63 @@ productSchema.index({ stock_quantity: 1 });
 productSchema.index({ current_stock: 1 });
 productSchema.index({ last_stock_update: 1 });
 
+// Pre-save middleware to track price changes
+productSchema.pre('save', async function(next) {
+  // Only track changes if this is an update (not a new document)
+  if (!this.isNew && this.isModified()) {
+    const PriceHistory = mongoose.model('PriceHistory');
+    
+    // Get the original document from the database
+    const originalDoc = await this.constructor.findById(this._id);
+    
+    if (originalDoc) {
+      const changes = {
+        product_id: this._id,
+        changed_by: this._doc?.changed_by || new mongoose.Types.ObjectId(), // Default user if not provided
+        change_reason: this._doc?.change_reason || 'Price updated',
+        is_bulk_update: this._doc?.is_bulk_update || false,
+        bulk_update_id: this._doc?.bulk_update_id || null
+      };
+
+      // Check for retail price changes
+      if (this.isModified('price') || this.isModified('unit_price')) {
+        const oldPrice = originalDoc.price || originalDoc.unit_price;
+        const newPrice = this.price || this.unit_price;
+        
+        if (oldPrice !== newPrice) {
+          changes.old_retail_price = oldPrice;
+          changes.new_retail_price = newPrice;
+          changes.change_type = changes.change_type ? 'both' : 'retail_price';
+        }
+      }
+
+      // Check for cost price changes
+      if (this.isModified('cost_price')) {
+        const oldCostPrice = originalDoc.cost_price;
+        const newCostPrice = this.cost_price;
+        
+        if (oldCostPrice !== newCostPrice) {
+          changes.old_cost_price = oldCostPrice;
+          changes.new_cost_price = newCostPrice;
+          changes.change_type = changes.change_type ? 'both' : 'cost_price';
+        }
+      }
+
+      // Create price history record if there are price changes
+      if (changes.change_type) {
+        try {
+          await PriceHistory.createPriceHistory(changes);
+        } catch (error) {
+          console.error('Error creating price history:', error);
+          // Don't fail the save operation if price history creation fails
+        }
+      }
+    }
+  }
+  
+  next();
+});
+
 // Instance methods for stock management
 productSchema.methods.updateStock = function(quantity, changeType = 'sale', userId = null) {
   const oldStock = this.current_stock;

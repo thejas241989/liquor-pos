@@ -1132,13 +1132,23 @@ router.get('/day-wise-sales', [
             total_sold_quantity: 0,
             total_closing_stock: 0,
             total_sales_amount: 0,
-            total_stock_value: 0
+            total_stock_value: 0,
+            total_cost: 0,
+            total_profit: 0,
+            avg_profit_margin: 0
           },
           products: []
         });
       }
 
       const category = categoryMap.get(categoryName);
+      const costPrice = stock.product.cost_price || 0;
+      const retailPrice = stock.product.price || stock.product.unit_price || 0;
+      const profitPerUnit = retailPrice - costPrice;
+      const profitMargin = costPrice > 0 ? (profitPerUnit / costPrice) * 100 : 0;
+      const totalCost = costPrice * sales.total_sold;
+      const totalProfit = sales.total_sales_amount - totalCost;
+
       const productData = {
         si_no: globalSiNo++,
         product_name: stock.product.name,
@@ -1148,7 +1158,13 @@ router.get('/day-wise-sales', [
         sold_quantity: sales.total_sold,
         closing_stock: stock.closing_stock,
         total_sales_amount: sales.total_sales_amount,
-        stock_value: stock.stock_value
+        stock_value: stock.stock_value,
+        cost_price: costPrice,
+        retail_price: retailPrice,
+        profit_per_unit: profitPerUnit,
+        profit_margin: profitMargin,
+        total_cost: totalCost,
+        total_profit: totalProfit
       };
 
       category.products.push(productData);
@@ -1161,6 +1177,8 @@ router.get('/day-wise-sales', [
       category.category_summary.total_closing_stock += stock.closing_stock;
       category.category_summary.total_sales_amount += sales.total_sales_amount;
       category.category_summary.total_stock_value += stock.stock_value;
+      category.category_summary.total_cost += totalCost;
+      category.category_summary.total_profit += totalProfit;
     });
 
     // Convert map to array and sort categories by name
@@ -1168,7 +1186,19 @@ router.get('/day-wise-sales', [
       a.category_name.localeCompare(b.category_name)
     );
 
+    // Calculate average profit margin for each category
+    categories.forEach(category => {
+      if (category.category_summary.total_cost > 0) {
+        category.category_summary.avg_profit_margin = 
+          (category.category_summary.total_profit / category.category_summary.total_cost) * 100;
+      }
+    });
+
     // Calculate overall summary
+    const totalCost = categories.reduce((sum, cat) => sum + cat.category_summary.total_cost, 0);
+    const totalProfit = categories.reduce((sum, cat) => sum + cat.category_summary.total_profit, 0);
+    const overallProfitMargin = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+
     const summary = {
       total_categories: categories.length,
       total_products: categories.reduce((sum, cat) => sum + cat.category_summary.total_products, 0),
@@ -1177,7 +1207,10 @@ router.get('/day-wise-sales', [
       total_sold_quantity: categories.reduce((sum, cat) => sum + cat.category_summary.total_sold_quantity, 0),
       total_closing_stock: categories.reduce((sum, cat) => sum + cat.category_summary.total_closing_stock, 0),
       total_sales_amount: categories.reduce((sum, cat) => sum + cat.category_summary.total_sales_amount, 0),
-      total_stock_value: categories.reduce((sum, cat) => sum + cat.category_summary.total_stock_value, 0)
+      total_stock_value: categories.reduce((sum, cat) => sum + cat.category_summary.total_stock_value, 0),
+      total_cost: totalCost,
+      total_profit: totalProfit,
+      overall_profit_margin: overallProfitMargin
     };
 
     res.json({

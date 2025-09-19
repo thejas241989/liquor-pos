@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const PriceHistory = require('../models/PriceHistory');
 const { verifyToken, requireManager, requireBiller } = require('../middleware/auth');
 const { validateProductCreation, validateObjectId, validatePagination, validateRateLimit } = require('../middleware/validation');
 
@@ -30,7 +31,7 @@ router.get('/test', async (req, res) => {
         category_name: product.category_id?.name || 'Unknown',
         category_id: product.category_id?._id,
         price: product.price || product.unit_price,
-        cost_price: product.cost_price || 0,
+        cost_price: product.cost_price || null,
         stock: product.stock_quantity,
         stock_quantity: product.stock_quantity,
         barcode: product.barcode || '',
@@ -77,7 +78,7 @@ router.get('/test', async (req, res) => {
       category_name: product.category_id?.name || 'Unknown',
       category_id: product.category_id?._id,
       price: product.price || product.unit_price,
-      cost_price: product.cost_price || 0,
+      cost_price: product.cost_price || null,
       stock: product.stock_quantity,
       stock_quantity: product.stock_quantity,
       barcode: product.barcode || '',
@@ -111,7 +112,7 @@ router.get('/test', async (req, res) => {
 router.post('/test', async (req, res) => {
   try {
     const {
-      name, category_id, barcode, price, stock_quantity = 0, 
+      name, category_id, barcode, price, cost_price, stock_quantity = 0, 
       volume, brand, alcohol_percentage, description
     } = req.body;
 
@@ -141,6 +142,7 @@ router.post('/test', async (req, res) => {
       barcode: barcode || undefined,
       price: Number(price),
       unit_price: Number(price), // Set unit_price same as price
+      cost_price: cost_price ? Number(cost_price) : undefined,
       stock_quantity: Number(stock_quantity) || 0,
       min_stock_level: 10,
       volume: volume || '',
@@ -332,7 +334,7 @@ router.get('/', [
       category_name: product.category_id?.name || 'Unknown',
       category_id: product.category_id?._id,
       price: product.price || product.unit_price,
-      cost_price: product.cost_price || 0,
+      cost_price: product.cost_price || null,
       stock: product.stock_quantity,
       stock_quantity: product.stock_quantity,
       barcode: product.barcode || '',
@@ -618,6 +620,76 @@ router.delete('/:id', [verifyToken, requireManager], async (req, res) => {
 
   } catch (error) {
     console.error('Delete product error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Get price history for a specific product
+router.get('/:id/price-history', [
+  verifyToken,
+  validateObjectId('id')
+], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 50 } = req.query;
+
+    const priceHistory = await PriceHistory.getProductPriceHistory(id, parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: priceHistory,
+      count: priceHistory.length
+    });
+  } catch (error) {
+    console.error('Get price history error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Get recent price changes across all products
+router.get('/price-history/recent', [
+  verifyToken,
+  requireManager
+], async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const priceHistory = await PriceHistory.getRecentPriceChanges(parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: priceHistory,
+      count: priceHistory.length
+    });
+  } catch (error) {
+    console.error('Get recent price changes error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Get price change statistics
+router.get('/price-history/stats', [
+  verifyToken,
+  requireManager
+], async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const stats = await PriceHistory.getPriceChangeStats(start_date, end_date);
+    
+    res.json({
+      success: true,
+      data: stats[0] || {
+        total_changes: 0,
+        retail_price_increases: 0,
+        retail_price_decreases: 0,
+        cost_price_increases: 0,
+        cost_price_decreases: 0,
+        avg_retail_price_change_percentage: 0,
+        avg_cost_price_change_percentage: 0,
+        avg_profit_margin_change: 0
+      }
+    });
+  } catch (error) {
+    console.error('Get price change stats error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });

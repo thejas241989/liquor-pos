@@ -14,6 +14,7 @@ interface Product {
   category: string;
   category_name: string;
   price: number;
+  cost_price?: number;
   stock: number;
   stock_quantity: number;
   barcode: string;
@@ -40,7 +41,46 @@ const POSScreen: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (selectedIndex >= 0 && searchResultsRef.current) {
+      const selectedElement = searchResultsRef.current.children[selectedIndex + 1] as HTMLElement; // +1 because of header
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    }
+  }, [selectedIndex]);
+
+  const completeSale = useCallback(() => {
+    if (cart.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    setShowPaymentModal(true);
+  }, [cart.length]);
+
+  // Keyboard shortcut for Complete Sale (Ctrl+Enter or F9)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Enter or F9 to complete sale
+      if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
+        e.preventDefault();
+        if (cart.length > 0 && !showPaymentModal) {
+          completeSale();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [cart.length, showPaymentModal, completeSale]);
 
   const getHeaderActions = () => {
     const navigationItems = [
@@ -476,15 +516,17 @@ const POSScreen: React.FC = () => {
   const getCartTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
     const total = subtotal;
-    return { subtotal, total };
-  };
-
-  const completeSale = () => {
-    if (cart.length === 0) {
-      alert('Cart is empty!');
-      return;
-    }
-    setShowPaymentModal(true);
+    
+    // Calculate total cost and profit
+    const totalCost = cart.reduce((sum, item) => {
+      const cost = item.product.cost_price || 0;
+      return sum + (cost * item.quantity);
+    }, 0);
+    
+    const totalProfit = subtotal - totalCost;
+    const profitMargin = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+    
+    return { subtotal, total, totalCost, totalProfit, profitMargin };
   };
 
   const handlePaymentComplete = async (paymentData: any) => {
@@ -606,7 +648,7 @@ const POSScreen: React.FC = () => {
     }
   };
 
-  const { subtotal, total } = getCartTotals();
+  const { subtotal, total, totalCost, totalProfit, profitMargin } = getCartTotals();
 
   if (loading) {
     return (
@@ -666,9 +708,41 @@ const POSScreen: React.FC = () => {
                 )}
               </div>
 
+              {/* Keyboard Shortcuts Info */}
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm text-blue-800">
+                  <div className="font-medium mb-2">💡 Keyboard Shortcuts:</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center space-x-2">
+                      <kbd className="px-2 py-1 bg-blue-100 rounded text-blue-700">↑↓</kbd>
+                      <span>Navigate search results</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <kbd className="px-2 py-1 bg-blue-100 rounded text-blue-700">Enter</kbd>
+                      <span>Select product</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <kbd className="px-2 py-1 bg-green-100 rounded text-green-700">Ctrl+Enter</kbd>
+                      <span>Complete sale</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <kbd className="px-2 py-1 bg-green-100 rounded text-green-700">F9</kbd>
+                      <span>Complete sale</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Search Results */}
               {searchResults.length > 0 && (
-                <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                <div ref={searchResultsRef} className="border border-gray-200 rounded-lg max-h-96 overflow-y-auto shadow-lg bg-white z-50 relative">
+                  {/* Results header */}
+                  <div className="sticky top-0 bg-gray-50 px-3 py-2 border-b border-gray-200 text-sm text-gray-600 font-medium">
+                    {searchResults.length} product{searchResults.length !== 1 ? 's' : ''} found
+                    {searchResults.length > 8 && (
+                      <span className="text-blue-600 ml-2">• Scroll to see more</span>
+                    )}
+                  </div>
                   {searchResults.map((product, index) => (
                     <div
                       key={product.id}
@@ -697,6 +771,10 @@ const POSScreen: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                  {/* Scroll indicator */}
+                  {searchResults.length > 8 && (
+                    <div className="sticky bottom-0 bg-gradient-to-t from-white to-transparent h-4 pointer-events-none"></div>
+                  )}
                 </div>
               )}
 
@@ -744,7 +822,25 @@ const POSScreen: React.FC = () => {
                 {cart.map((item) => (
                   <div key={item.product.id} className="border-b border-gray-100 pb-3">
                     <div className="font-medium text-gray-900 text-sm">{item.product.name}</div>
-                    <div className="text-xs text-gray-600 mb-2">{item.product.volume}</div>
+                    <div className="text-xs text-gray-600 mb-1">{item.product.volume}</div>
+                    
+                    {/* Cost and Profit Information */}
+                    {item.product.cost_price && item.product.cost_price > 0 && (
+                      <div className="text-xs text-gray-500 mb-2">
+                        <span>Cost: {formatCurrency(item.product.cost_price)}</span>
+                        <span className="mx-2">•</span>
+                        <span className={`font-medium ${
+                          ((item.product.price - item.product.cost_price) / item.product.cost_price * 100) >= 30 
+                            ? 'text-green-600' 
+                            : ((item.product.price - item.product.cost_price) / item.product.cost_price * 100) >= 15 
+                              ? 'text-yellow-600' 
+                              : 'text-red-600'
+                        }`}>
+                          {((item.product.price - item.product.cost_price) / item.product.cost_price * 100).toFixed(1)}% margin
+                        </span>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-between items-center">
                       <div className="flex items-center space-x-2">
                         <button
@@ -763,6 +859,11 @@ const POSScreen: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold">{formatCurrency(item.subtotal)}</div>
+                        {item.product.cost_price && item.product.cost_price > 0 && (
+                          <div className="text-xs text-gray-500">
+                            Profit: {formatCurrency((item.product.price - item.product.cost_price) * item.quantity)}
+                          </div>
+                        )}
                         <button
                           onClick={() => removeFromCart(item.product.id)}
                           className="text-xs text-red-600 hover:text-red-800"
@@ -786,6 +887,35 @@ const POSScreen: React.FC = () => {
                 <span>Subtotal:</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
+              
+              {/* Cost and Profit Information */}
+              {totalCost > 0 && (
+                <>
+                  <div className="flex justify-between mb-1 text-sm text-gray-600">
+                    <span>Total Cost:</span>
+                    <span>{formatCurrency(totalCost)}</span>
+                  </div>
+                  <div className="flex justify-between mb-1 text-sm">
+                    <span>Total Profit:</span>
+                    <span className={`font-medium ${
+                      profitMargin >= 30 ? 'text-green-600' : 
+                      profitMargin >= 15 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {formatCurrency(totalProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between mb-2 text-sm">
+                    <span>Profit Margin:</span>
+                    <span className={`font-medium ${
+                      profitMargin >= 30 ? 'text-green-600' : 
+                      profitMargin >= 15 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {profitMargin.toFixed(1)}%
+                    </span>
+                  </div>
+                </>
+              )}
+              
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>Total:</span>
                 <span>{formatCurrency(total)}</span>
@@ -795,9 +925,16 @@ const POSScreen: React.FC = () => {
             <button 
               onClick={completeSale}
               disabled={cart.length === 0}
-              className="w-full bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 transition-colors mt-4 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 transition-colors mt-4 disabled:opacity-50 disabled:cursor-not-allowed font-medium relative"
             >
-              Complete Sale ({cart.reduce((sum, item) => sum + item.quantity, 0)} items)
+              <div className="flex items-center justify-between">
+                <span>Complete Sale ({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+                <div className="flex items-center space-x-2 text-sm opacity-75">
+                  <kbd className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">Ctrl+Enter</kbd>
+                  <span className="text-xs">or</span>
+                  <kbd className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">F9</kbd>
+                </div>
+              </div>
             </button>
           </div>
         </div>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, Plus, Search, Filter, Edit, Trash2, Tag, BarChart3 } from 'lucide-react';
+import { Package, Plus, Search, Filter, Edit, Trash2, Tag, BarChart3, Upload } from 'lucide-react';
 import PageHeader from '../common/PageHeader';
 import AdminNavigation from '../common/AdminNavigation';
 import { formatCurrency } from '../../utils/formatCurrency';
+import BulkImportModal from './BulkImportModal';
+import { apiService } from '../../services/api';
 
 interface Product {
   id: string;
@@ -11,6 +13,7 @@ interface Product {
   category: string;
   category_name: string;
   price: number;
+  cost_price?: number;
   stock: number;
   stock_quantity: number;
   barcode: string;
@@ -48,6 +51,9 @@ const ProductManagement: React.FC = () => {
   // Category management states
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  
+  // Bulk import states
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
   
   // Volume management states
@@ -544,6 +550,57 @@ const ProductManagement: React.FC = () => {
     }
   };
 
+  const handleBulkImport = async (importedProducts: any[]): Promise<void> => {
+    try {
+      // Process each product and create it
+      for (const productData of importedProducts) {
+        try {
+          // Find or create category
+          let categoryId = categories.find(c => c.name.toLowerCase() === productData.category_name.toLowerCase())?.id;
+          
+          if (!categoryId) {
+            // Create new category if it doesn't exist
+            const categoryResponse = await apiService.createCategory({
+              name: productData.category_name,
+              description: `Auto-created from bulk import`
+            });
+            
+            if (categoryResponse.success && categoryResponse.data) {
+              categoryId = categoryResponse.data.id;
+              setCategories(prev => [...prev, categoryResponse.data]);
+            } else {
+              throw new Error(`Failed to create category: ${productData.category_name}`);
+            }
+          }
+
+          // Create the product
+          await apiService.createProduct({
+            name: productData.name,
+            price: productData.price,
+            cost_price: productData.cost_price,
+            category: categoryId,
+            volume: productData.volume,
+            barcode: productData.barcode,
+            stock_quantity: productData.stock_quantity || 0,
+            alcohol_content: productData.alcohol_content,
+            cost: productData.cost,
+            min_stock_level: productData.min_stock_level,
+            status: productData.status || 'active'
+          });
+        } catch (error) {
+          console.error(`Error creating product ${productData.name}:`, error);
+          throw new Error(`Failed to create product: ${productData.name}`);
+        }
+      }
+
+      // Refresh the products list
+      await fetchData();
+    } catch (error) {
+      console.error('Bulk import error:', error);
+      throw error;
+    }
+  };
+
   // Category Management Functions
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -727,6 +784,13 @@ const ProductManagement: React.FC = () => {
         Filter
       </button>
       <button 
+        onClick={() => setShowBulkImportModal(true)}
+        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+      >
+        <Upload className="w-4 h-4" />
+        Bulk Import
+      </button>
+      <button 
         onClick={() => navigate('/products/new')}
         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
       >
@@ -903,7 +967,13 @@ const ProductManagement: React.FC = () => {
                       Volume
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Price
+                      Retail Price
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Cost Price
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Profit Margin
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Stock
@@ -930,8 +1000,26 @@ const ProductManagement: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {product.volume}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                         {formatCurrency(product.price)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {product.cost_price ? formatCurrency(product.cost_price) : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {product.cost_price && product.cost_price > 0 ? (
+                          <span className={`font-semibold ${
+                            ((product.price - product.cost_price) / product.cost_price * 100) >= 30 
+                              ? 'text-green-600' 
+                              : ((product.price - product.cost_price) / product.cost_price * 100) >= 15 
+                                ? 'text-yellow-600' 
+                                : 'text-red-600'
+                          }`}>
+                            {((product.price - product.cost_price) / product.cost_price * 100).toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <span className={`font-semibold ${product.stock < 10 ? 'text-red-600' : 'text-green-600'}`}>
@@ -1257,6 +1345,14 @@ const ProductManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onImport={handleBulkImport}
+        categories={categories}
+      />
     </div>
   );
 };

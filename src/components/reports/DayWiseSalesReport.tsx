@@ -15,6 +15,9 @@ interface DayWiseSalesReportData {
     total_closing_stock: number;
     total_sales_amount: number;
     total_stock_value: number;
+    total_cost: number;
+    total_profit: number;
+    overall_profit_margin: number;
   };
   categories: Array<{
     category_name: string;
@@ -26,6 +29,9 @@ interface DayWiseSalesReportData {
       total_closing_stock: number;
       total_sales_amount: number;
       total_stock_value: number;
+      total_cost: number;
+      total_profit: number;
+      avg_profit_margin: number;
     };
     products: Array<{
       si_no: number;
@@ -37,6 +43,12 @@ interface DayWiseSalesReportData {
       closing_stock: number;
       total_sales_amount: number;
       stock_value: number;
+      cost_price: number;
+      retail_price: number;
+      profit_per_unit: number;
+      profit_margin: number;
+      total_cost: number;
+      total_profit: number;
     }>;
   }>;
 }
@@ -159,41 +171,53 @@ const DayWiseSalesReport: React.FC = () => {
       ['Day-wise Sales Report (Categorized)', reportData.report_date],
       [''],
       ['Overall Summary'],
-      ['Total Categories', reportData.summary.total_categories],
-      ['Total Products', reportData.summary.total_products],
-      ['Total Opening Stock', reportData.summary.total_opening_stock],
-      ['Total Stock Inward', reportData.summary.total_stock_inward],
-      ['Total Sold Quantity', reportData.summary.total_sold_quantity],
-      ['Total Closing Stock', reportData.summary.total_closing_stock],
-      ['Total Sales Amount', reportData.summary.total_sales_amount],
-      ['Total Stock Value', reportData.summary.total_stock_value],
+      ['Total Categories', reportData.summary.total_categories || 0],
+      ['Total Products', reportData.summary.total_products || 0],
+      ['Total Opening Stock', reportData.summary.total_opening_stock || 0],
+      ['Total Stock Inward', reportData.summary.total_stock_inward || 0],
+      ['Total Sold Quantity', reportData.summary.total_sold_quantity || 0],
+      ['Total Closing Stock', reportData.summary.total_closing_stock || 0],
+      ['Total Sales Amount', reportData.summary.total_sales_amount || 0],
+      ['Total Stock Value', reportData.summary.total_stock_value || 0],
+      ['Total Cost', reportData.summary.total_cost || 0],
+      ['Total Profit', reportData.summary.total_profit || 0],
+      ['Overall Profit Margin (%)', (reportData.summary.overall_profit_margin || 0).toFixed(2)],
       [''],
       ['Category-wise Summary'],
-      ['Category Name', 'Products', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value'],
+      ['Category Name', 'Products', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value', 'Total Cost', 'Total Profit', 'Avg Profit Margin (%)'],
       ...reportData.categories.map(category => [
-        category.category_name,
-        category.category_summary.total_products,
-        category.category_summary.total_opening_stock,
-        category.category_summary.total_stock_inward,
-        category.category_summary.total_sold_quantity,
-        category.category_summary.total_closing_stock,
-        category.category_summary.total_sales_amount,
-        category.category_summary.total_stock_value
+        category.category_name || '',
+        category.category_summary.total_products || 0,
+        category.category_summary.total_opening_stock || 0,
+        category.category_summary.total_stock_inward || 0,
+        category.category_summary.total_sold_quantity || 0,
+        category.category_summary.total_closing_stock || 0,
+        category.category_summary.total_sales_amount || 0,
+        category.category_summary.total_stock_value || 0,
+        category.category_summary.total_cost || 0,
+        category.category_summary.total_profit || 0,
+        (category.category_summary.avg_profit_margin || 0).toFixed(2)
       ]),
       [''],
       ['Detailed Product Data'],
-      ['SI No', 'Product Name', 'Category', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value'],
+      ['SI No', 'Product Name', 'Category', 'Opening Stock', 'Stock Inward', 'Sold Quantity', 'Closing Stock', 'Sales Amount', 'Stock Value', 'Cost Price', 'Retail Price', 'Profit Per Unit', 'Profit Margin (%)', 'Total Cost', 'Total Profit'],
       ...reportData.categories.flatMap(category => 
         category.products.map(product => [
-          product.si_no,
-          product.product_name,
-          product.category_name,
-          product.opening_stock,
-          product.stock_inward,
-          product.sold_quantity,
-          product.closing_stock,
-          product.total_sales_amount,
-          product.stock_value
+          product.si_no || '',
+          product.product_name || '',
+          product.category_name || '',
+          product.opening_stock || 0,
+          product.stock_inward || 0,
+          product.sold_quantity || 0,
+          product.closing_stock || 0,
+          product.total_sales_amount || 0,
+          product.stock_value || 0,
+          product.cost_price || 0,
+          product.retail_price || 0,
+          product.profit_per_unit || 0,
+          (product.profit_margin || 0).toFixed(2),
+          product.total_cost || 0,
+          product.total_profit || 0
         ])
       )
     ].map(row => row.join(',')).join('\n');
@@ -320,7 +344,7 @@ const DayWiseSalesReport: React.FC = () => {
       {reportData && !loading && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg">
@@ -377,6 +401,52 @@ const DayWiseSalesReport: React.FC = () => {
                 <div>
                   <p className="text-sm text-gray-600">Stock Value</p>
                   <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData?.summary.total_stock_value || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cost Analysis Cards */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Cost</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(reportData?.summary.total_cost || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Profit</p>
+                  <p className={`text-2xl font-bold ${
+                    (reportData?.summary.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {formatCurrency(reportData?.summary.total_profit || 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Profit Margin</p>
+                  <p className={`text-2xl font-bold ${
+                    (reportData?.summary.overall_profit_margin || 0) >= 30 ? 'text-green-600' : 
+                    (reportData?.summary.overall_profit_margin || 0) >= 15 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {(reportData?.summary.overall_profit_margin || 0).toFixed(1)}%
+                  </p>
                 </div>
               </div>
             </div>

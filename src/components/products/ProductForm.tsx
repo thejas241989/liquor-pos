@@ -9,6 +9,7 @@ interface FormState {
   category_id: string | '';
   volume: string;
   price: number | '';
+  cost_price: number | '';
   stock_quantity: number | '';
   barcode: string;
 }
@@ -25,6 +26,7 @@ const ProductForm: React.FC = () => {
     category_id: '',
     volume: '',
     price: '',
+    cost_price: '',
     stock_quantity: '',
     barcode: ''
   });
@@ -91,6 +93,7 @@ const ProductForm: React.FC = () => {
             category_id: p.category_id || '',
             volume: p.volume || '',
             price: p.price || '',
+            cost_price: p.cost_price || '',
             stock_quantity: p.stock_quantity || '',
             barcode: p.barcode || ''
           });
@@ -127,6 +130,7 @@ const ProductForm: React.FC = () => {
         category_id: form.category_id,
         volume: form.volume,
         price: Number(form.price) || 0,
+        cost_price: Number(form.cost_price) || undefined,
         stock_quantity: Number(form.stock_quantity) || 0,
         barcode: form.barcode
       };
@@ -264,8 +268,13 @@ const ProductForm: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Price</label>
-                <input type="number" value={String(form.price)} onChange={e => handleChange('price', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" />
+                <label className="block text-sm font-medium text-gray-700">Retail Price (Selling Price)</label>
+                <input type="number" step="0.01" value={String(form.price)} onChange={e => handleChange('price', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" placeholder="Enter selling price" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Cost Price</label>
+                <input type="number" step="0.01" value={String(form.cost_price)} onChange={e => handleChange('cost_price', e.target.value)} className="mt-1 w-full px-3 py-2 border rounded" placeholder="Enter cost price" />
               </div>
 
               <div>

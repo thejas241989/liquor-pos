@@ -132,6 +132,13 @@ class ApiService {
     return this.request(`/products/${id}`);
   }
 
+  async createProduct(payload: any) {
+    return this.request('/products', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getProductByBarcode(barcode: string) {
     return this.request(`/products/barcode/${barcode}`);
   }
@@ -147,6 +154,13 @@ class ApiService {
 
   async getCategory(id: string) {
     return this.request(`/categories/${id}`);
+  }
+
+  async createCategory(payload: { name: string; description: string }) {
+    return this.request('/categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // Sales endpoints
